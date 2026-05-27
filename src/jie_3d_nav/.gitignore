@@ -1,0 +1,56 @@
+# ROS 2 / colcon build outputs
+build/
+install/
+log/
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# CMake and compiler artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.o
+*.so
+*.a
+compile_commands.json
+
+# ROS bags, maps, and large runtime data
+*.bag
+*.bag2
+*.db3
+*.mcap
+*.bt
+*.ot
+*.pcd
+*.ply
+
+# Editor and OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+*.bak
+*.orig
+*.rej
+.DS_Store
+Thumbs.db
+
+# Local environment files
+.env
+*.local
+media/1.png
+media/2.png
+media/3.png
+media/AJQR.jpg
+media/book_1.jpg

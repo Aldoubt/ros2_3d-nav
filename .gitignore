@@ -1,0 +1,49 @@
+# Workspace-level build outputs
+build/
+install/
+log/
+.venv-jie3d/
+
+# ROS 2 source workspace transient outputs
+src/build/
+src/install/
+src/log/
+
+# Tooling and editor state
+src/.agents/
+src/.codex/
+src/.vscode/
+.vscode/
+.idea/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Patch and temp files
+*.swp
+*.swo
+*.tmp
+*.bak
+*.orig
+*.rej
+.DS_Store
+Thumbs.db
+
+# Large runtime data and maps
+*.bag
+*.bag2
+*.db3
+*.mcap
+*.pcd
+*.ply
+*.bin
+*.xyz
+*.lvx
+
+# Residual workspace metadata
+src/.git/
