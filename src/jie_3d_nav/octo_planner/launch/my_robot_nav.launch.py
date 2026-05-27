@@ -63,6 +63,11 @@ def generate_launch_description():
         default_value="false",
         description="Launch FAST-LIVO2 ROS2 as the odometry source for MID360.",
     )
+    launch_lidar_localization_arg = DeclareLaunchArgument(
+        "launch_lidar_localization",
+        default_value="false",
+        description="Launch lidar_localization_ros2 to publish map -> odom relocalization.",
+    )
     launch_cmd_bridge_arg = DeclareLaunchArgument(
         "launch_cmd_bridge",
         default_value="false",
@@ -158,6 +163,65 @@ def generate_launch_description():
         default_value="false",
         description="Launch FAST-LIVO2's RViz profile together with odometry.",
     )
+    lidar_localization_param_path_arg = DeclareLaunchArgument(
+        "lidar_localization_param_path",
+        default_value=os.path.join(
+            get_package_share_directory("octo_planner"),
+            "config",
+            "lidar_localization_mid360_fastlivo.yaml",
+        ),
+        description="Parameter file for lidar_localization_ros2 relocalization.",
+    )
+    lidar_localization_map_path_arg = DeclareLaunchArgument(
+        "lidar_localization_map_path",
+        default_value="",
+        description="Absolute path to the pointcloud map used for relocalization.",
+    )
+    lidar_localization_cloud_topic_arg = DeclareLaunchArgument(
+        "lidar_localization_cloud_topic",
+        default_value="/cloud_registered",
+        description="PointCloud2 topic consumed by lidar_localization_ros2.",
+    )
+    lidar_localization_set_initial_pose_arg = DeclareLaunchArgument(
+        "lidar_localization_set_initial_pose",
+        default_value="false",
+        description="Set a startup initial pose for lidar_localization_ros2.",
+    )
+    lidar_localization_initial_pose_x_arg = DeclareLaunchArgument(
+        "lidar_localization_initial_pose_x",
+        default_value="0.0",
+        description="Initial pose x for lidar_localization_ros2.",
+    )
+    lidar_localization_initial_pose_y_arg = DeclareLaunchArgument(
+        "lidar_localization_initial_pose_y",
+        default_value="0.0",
+        description="Initial pose y for lidar_localization_ros2.",
+    )
+    lidar_localization_initial_pose_z_arg = DeclareLaunchArgument(
+        "lidar_localization_initial_pose_z",
+        default_value="0.0",
+        description="Initial pose z for lidar_localization_ros2.",
+    )
+    lidar_localization_initial_pose_qx_arg = DeclareLaunchArgument(
+        "lidar_localization_initial_pose_qx",
+        default_value="0.0",
+        description="Initial pose quaternion x for lidar_localization_ros2.",
+    )
+    lidar_localization_initial_pose_qy_arg = DeclareLaunchArgument(
+        "lidar_localization_initial_pose_qy",
+        default_value="0.0",
+        description="Initial pose quaternion y for lidar_localization_ros2.",
+    )
+    lidar_localization_initial_pose_qz_arg = DeclareLaunchArgument(
+        "lidar_localization_initial_pose_qz",
+        default_value="0.0",
+        description="Initial pose quaternion z for lidar_localization_ros2.",
+    )
+    lidar_localization_initial_pose_qw_arg = DeclareLaunchArgument(
+        "lidar_localization_initial_pose_qw",
+        default_value="1.0",
+        description="Initial pose quaternion w for lidar_localization_ros2.",
+    )
     cmd_vel_topic_arg = DeclareLaunchArgument(
         "cmd_vel_topic",
         default_value="/cmd_vel",
@@ -242,6 +306,54 @@ def generate_launch_description():
             "params_file": LaunchConfiguration("fastlivo_config_path"),
             "use_rviz": LaunchConfiguration("fastlivo_use_rviz"),
             "use_sim_time": "false",
+        }.items(),
+    )
+    lidar_localization_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory("octo_planner"),
+                "launch",
+                "mid360_relocalization.launch.py",
+            )
+        ),
+        condition=IfCondition(LaunchConfiguration("launch_lidar_localization")),
+        launch_arguments={
+            "localization_param_path": LaunchConfiguration(
+                "lidar_localization_param_path"
+            ),
+            "map_path": LaunchConfiguration("lidar_localization_map_path"),
+            "cloud_topic": LaunchConfiguration("lidar_localization_cloud_topic"),
+            "imu_topic": "/livox/imu",
+            "registration_method": "NDT_OMP",
+            "ndt_num_threads": "4",
+            "global_frame_id": map_frame,
+            "odom_frame_id": odom_frame,
+            "base_frame_id": base_frame,
+            "enable_map_odom_tf": "true",
+            "set_initial_pose": LaunchConfiguration(
+                "lidar_localization_set_initial_pose"
+            ),
+            "initial_pose_x": LaunchConfiguration(
+                "lidar_localization_initial_pose_x"
+            ),
+            "initial_pose_y": LaunchConfiguration(
+                "lidar_localization_initial_pose_y"
+            ),
+            "initial_pose_z": LaunchConfiguration(
+                "lidar_localization_initial_pose_z"
+            ),
+            "initial_pose_qx": LaunchConfiguration(
+                "lidar_localization_initial_pose_qx"
+            ),
+            "initial_pose_qy": LaunchConfiguration(
+                "lidar_localization_initial_pose_qy"
+            ),
+            "initial_pose_qz": LaunchConfiguration(
+                "lidar_localization_initial_pose_qz"
+            ),
+            "initial_pose_qw": LaunchConfiguration(
+                "lidar_localization_initial_pose_qw"
+            ),
         }.items(),
     )
 
@@ -428,6 +540,7 @@ def generate_launch_description():
             launch_controller_arg,
             launch_livox_driver_arg,
             launch_fastlivo_arg,
+            launch_lidar_localization_arg,
             launch_cmd_bridge_arg,
             launch_chassis_arg,
             launch_web_arg,
@@ -443,6 +556,17 @@ def generate_launch_description():
             livox_publish_freq_arg,
             fastlivo_config_path_arg,
             fastlivo_use_rviz_arg,
+            lidar_localization_param_path_arg,
+            lidar_localization_map_path_arg,
+            lidar_localization_cloud_topic_arg,
+            lidar_localization_set_initial_pose_arg,
+            lidar_localization_initial_pose_x_arg,
+            lidar_localization_initial_pose_y_arg,
+            lidar_localization_initial_pose_z_arg,
+            lidar_localization_initial_pose_qx_arg,
+            lidar_localization_initial_pose_qy_arg,
+            lidar_localization_initial_pose_qz_arg,
+            lidar_localization_initial_pose_qw_arg,
             cmd_vel_topic_arg,
             ctrl_cmd_topic_arg,
             robot_radius_arg,
@@ -452,6 +576,7 @@ def generate_launch_description():
             static_odom_to_base_node,
             livox_driver_launch,
             fastlivo_launch,
+            lidar_localization_launch,
             planner_node,
             controller_node,
             cmd_bridge_node,

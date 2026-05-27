@@ -207,6 +207,231 @@ jie_3d_nav/
 - Web 中“已定位”状态正常。
 - 机器人当前位姿、地图、路径规划在同一全局坐标系下。
 
+## MID360 + FAST-LIVO2 + lidar_localization_ros2 联调准备
+
+当前工作区已经接入一条最小可运行链路：
+
+- `livox_ros_driver2` 提供 MID360 原始数据。
+- `FAST-LIVO2-ROS2` 提供 `odom -> livox_frame` 和 `/cloud_registered`。
+- `lidar_localization_ros2` 消费 `/cloud_registered`，发布 `map -> odom`。
+- `my_robot_nav.launch.py` 作为统一入口，负责把定位、重定位、地图、规划和可视化串起来。
+
+当前第一版约束：
+
+- 先使用 `livox_frame` 作为 `base_frame`。
+- 先使用 `FAST-LIVO2` 输出的 `/cloud_registered` 做 scan-to-map。
+- 先关闭 `lidar_localization_ros2` 的 IMU 预积分，避免与 `FAST-LIVO2` 的 IMU 融合重复叠加。
+- 地图文件建议单独放在仓库外部目录，运行时通过绝对路径传入 `lidar_localization_map_path`。
+
+已新增的关键文件：
+
+- `octo_planner/config/lidar_localization_mid360_fastlivo.yaml`
+- `octo_planner/launch/mid360_relocalization.launch.py`
+- `octo_planner/launch/my_robot_nav.launch.py`
+
+### 推荐启动顺序
+
+1. 先编译并加载工作区环境：
+
+```bash
+cd /home/yangxuan/ros2_ws/src
+colcon build --symlink-install
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+export ROS_LOG_DIR=/tmp/ros_logs
+```
+
+2. 准备一份用于重定位的全局点云地图，例如：
+
+```text
+/data/maps/site_a/site_a_global_map.pcd
+```
+
+3. 启动整套链路：
+
+```bash
+ros2 launch octo_planner my_robot_nav.launch.py \
+  launch_livox_driver:=true \
+  launch_fastlivo:=true \
+  launch_lidar_localization:=true \
+  publish_static_odom_to_base:=false \
+  base_frame:=livox_frame \
+  lidar_localization_map_path:=/data/maps/site_a/site_a_global_map.pcd
+```
+
+4. 如果已知机器人初始位姿，再补充初始位姿参数：
+
+```bash
+ros2 launch octo_planner my_robot_nav.launch.py \
+  launch_livox_driver:=true \
+  launch_fastlivo:=true \
+  launch_lidar_localization:=true \
+  publish_static_odom_to_base:=false \
+  base_frame:=livox_frame \
+  lidar_localization_map_path:=/data/maps/site_a/site_a_global_map.pcd \
+  lidar_localization_set_initial_pose:=true \
+  lidar_localization_initial_pose_x:=0.0 \
+  lidar_localization_initial_pose_y:=0.0 \
+  lidar_localization_initial_pose_z:=0.0 \
+  lidar_localization_initial_pose_qx:=0.0 \
+  lidar_localization_initial_pose_qy:=0.0 \
+  lidar_localization_initial_pose_qz:=0.0 \
+  lidar_localization_initial_pose_qw:=1.0
+```
+
+### 联调时优先检查的 topic
+
+- `/livox/imu`
+- `/livox/lidar`
+- `/cloud_registered`
+- `/localization/pose`
+- `/tf`
+- `/tf_static`
+
+推荐检查命令：
+
+```bash
+ros2 topic list | sort
+ros2 topic hz /cloud_registered
+ros2 topic echo /localization/pose --once
+```
+
+### 联调时优先检查的 TF
+
+理想 TF 链应为：
+
+```text
+map -> odom -> livox_frame
+```
+
+推荐检查命令：
+
+```bash
+ros2 run tf2_ros tf2_echo odom livox_frame
+ros2 run tf2_ros tf2_echo map odom
+ros2 run tf2_ros tf2_echo map livox_frame
+```
+
+判断标准：
+
+- `odom -> livox_frame` 持续变化，说明 `FAST-LIVO2` 里程计正常。
+- `map -> odom` 存在且较稳定，说明重定位链路已经接管全局配准。
+- `map -> livox_frame` 连续变化且与机器人真实运动一致，说明全链路基本打通。
+
+### 这版联调最容易卡住的点
+
+- `lidar_localization_map_path` 为空或路径错误，重定位节点会启动但无法真正匹配地图。
+- `base_frame` 不是 `livox_frame`，而 TF 中又没有对应变换，会导致重定位无法正确取姿态。
+- `FAST-LIVO2` 没有稳定输出 `/cloud_registered`，重定位节点会一直等输入点云。
+- 地图坐标系与建图时使用的里程计坐标系差异过大，未设置初始位姿时可能长时间无法收敛。
+- 若后续切回原始点云而不是 `/cloud_registered`，需要重新检查去畸变、时间同步和点云 frame 命名。
+
+### 初始位姿的几种方式与差别
+
+当前这版文档里给出的初始位姿参数：
+
+- `lidar_localization_set_initial_pose`
+- `lidar_localization_initial_pose_x/y/z/qx/qy/qz/qw`
+
+本质上是“启动时给一个固定 seed”，不是算法只能写死，而是为了先把第一版链路稳定跑通。
+
+常见做法可以分成三类：
+
+- 启动参数写死
+  适合已知起点、重复测试和录包回放。优点是最稳、最容易复现。缺点是每次换场地或换起点都要改参数。
+- RViz 手动给初始位姿
+  适合现场调试。`lidar_localization_ros2` 本身支持从 `/initialpose` 接收 `geometry_msgs/msg/PoseWithCovarianceStamped`，也就是可以走 RViz 里的 `2D Pose Estimate` / `SetInitialPose` 这类工具来人工给 seed。它和启动参数的本质差别不大，都是“给一个初值后再局部配准”，只是 RViz 更灵活，不用重启节点。
+- 自动全局配准
+  这类方案通常不是单纯的局部 NDT/GICP，而是先做全局搜索、回环候选检索、描述子匹配或多初值尝试，再把结果交给局部配准细化。优点是更自动，缺点是计算量更大、误匹配风险更高、参数和场景依赖更强。
+
+对你现在这套 `MID360 + FAST-LIVO2 + lidar_localization_ros2`，我建议分两步走：
+
+- 当前阶段先保留“启动参数 seed + 必要时 RViz 手动修正”。
+- 等现场链路稳定后，再考虑补自动全局初始化或失败后自动重定位。
+
+也就是说，当前方案并不是不能从 RViz 给位姿，而是我先把最稳的入口参数接好了。后面如果你想要，我可以再帮你把 RViz 初始位姿这条交互链单独接顺。
+
+### FAST-LIVO2 建图并导出全局点云地图
+
+`FAST-LIVO2` 这边已经具备建图和导出点云地图的能力。当前配置文件是：
+
+- `FAST-LIVO2-ROS2/config/mid360_lio_only.yaml`
+
+里面现在的相关配置是：
+
+```yaml
+pcd_save:
+  pcd_save_en: false
+  colmap_output_en: false
+  filter_size_pcd: 0.15
+  interval: -1
+```
+
+含义可以先这样理解：
+
+- `pcd_save_en: true`
+  开启 PCD 保存。
+- `filter_size_pcd`
+  导出前对地图点云做体素滤波，值越大文件越小、细节越少。
+- `interval`
+  保存间隔控制。通常 `-1` 表示结束时统一输出，具体行为以上游实现为准。
+
+推荐流程：
+
+1. 先把 `pcd_save_en` 改成 `true`。
+2. 单独启动 `FAST-LIVO2` 做建图，不急着开重定位。
+3. 手动走完整个目标区域，尽量闭环、多方向覆盖。
+4. 正常结束节点后，到 `FAST-LIVO2` 的输出目录确认导出的地图文件。
+5. 对导出的地图做一次体素降采样或裁剪，得到更适合作为重定位输入的全局 `.pcd`。
+6. 把这个 `.pcd` 通过 `lidar_localization_map_path:=/absolute/path/to/map.pcd` 喂给重定位链。
+
+建议把“建图用原始大地图”和“重定位用精简地图”分开保存：
+
+- 建图原始图：尽量完整保留
+- 重定位运行图：适当裁剪、降采样、只保留主要可观测结构
+
+这样运行时会更稳，也更省内存和匹配时间。
+
+### 连车前的底盘准备
+
+如果要真正连上车体，除了定位和规划链路，还需要先把 CAN 和底盘驱动准备好。
+
+推荐顺序：
+
+1. 激活 `can0`：
+
+```bash
+sudo ip link set can0 up type can bitrate 500000
+```
+
+2. 加载工作区环境：
+
+```bash
+cd /home/yangxuan/ros2_ws/src
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+```
+
+3. 启动底盘驱动：
+
+```bash
+ros2 launch yhs_can_control yhs_can_control.launch.py
+```
+
+4. 再启动导航主链，或者先单独测试 `/ctrl_cmd` 是否能被底盘侧接收。
+
+当前底盘相关默认约定：
+
+- CAN 设备名默认是 `can0`
+- `yhs_can_control` 默认订阅 `/ctrl_cmd`
+- `octo_planner` 里的桥接节点负责把 `/cmd_vel` 转成 `yhs_can_interfaces/msg/CtrlCmd`
+
+如果后面要做整套实车 bringup，推荐拆成三个终端：
+
+- 终端 1：`yhs_can_control`
+- 终端 2：`my_robot_nav.launch.py`
+- 终端 3：`ros2 topic echo /ctrl_cmd`、`ros2 topic echo /cmd_vel`、`ros2 run tf2_ros tf2_echo map livox_frame` 做观测
+
 ### 阶段 5：新增底盘桥接节点
 
 目标：
