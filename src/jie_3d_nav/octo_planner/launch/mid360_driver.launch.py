@@ -10,6 +10,9 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     octo_planner_share = get_package_share_directory("octo_planner")
+    runtime_ld_library_path = (
+        "/usr/lib/x86_64-linux-gnu:" + os.environ.get("LD_LIBRARY_PATH", "")
+    )
     default_config_path = os.path.join(
         octo_planner_share, "config", "mid360_livox_config.json"
     )
@@ -31,10 +34,10 @@ def generate_launch_description():
     )
     xfer_format_arg = DeclareLaunchArgument(
         "xfer_format",
-        default_value="1",
+        default_value="0",
         description=(
-            "Point cloud output format. Use 1 for Livox customized point cloud, "
-            "which matches the current FAST-LIVO2 mid360 configuration."
+            "Point cloud output format. Use 0 for Livox PointCloud2(PointXYZRTLT), "
+            "which matches the current FAST-LIVO2 MID360 configuration."
         ),
     )
     multi_topic_arg = DeclareLaunchArgument(
@@ -48,6 +51,7 @@ def generate_launch_description():
         executable="livox_ros_driver2_node",
         name="livox_lidar_publisher",
         output="screen",
+        additional_env={"LD_LIBRARY_PATH": runtime_ld_library_path},
         parameters=[
             {
                 "xfer_format": ParameterValue(

@@ -12,6 +12,9 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     package_share = get_package_share_directory("fast_livo")
+    runtime_ld_library_path = (
+        "/usr/lib/x86_64-linux-gnu:" + os.environ.get("LD_LIBRARY_PATH", "")
+    )
     default_config = os.path.join(package_share, "config", "mid360_lio_only.yaml")
     default_rviz = os.path.join(package_share, "rviz_cfg", "fast_livo2.rviz")
 
@@ -41,6 +44,7 @@ def generate_launch_description():
                 executable="fastlivo_mapping",
                 name="fastlivo_mapping",
                 output="screen",
+                additional_env={"LD_LIBRARY_PATH": runtime_ld_library_path},
                 parameters=[
                     LaunchConfiguration("params_file"),
                     {"use_sim_time": LaunchConfiguration("use_sim_time")},

@@ -351,6 +351,45 @@ ros2 run tf2_ros tf2_echo map livox_frame
 
 也就是说，当前方案并不是不能从 RViz 给位姿，而是我先把最稳的入口参数接好了。后面如果你想要，我可以再帮你把 RViz 初始位姿这条交互链单独接顺。
 
+现在这条链已经在工作区里直接接好了：
+
+- `lidar_localization_ros2` 直接订阅 `/initialpose`
+- `my_robot_nav.launch.py` 默认使用 `jie_octomap/rviz/mid360_localization.rviz`
+- 这个 RViz 配置已经包含：
+  - `SetInitialPose -> /initialpose`
+  - `/initial_map` 地图点云显示
+  - `/cloud_registered` 当前扫描显示
+  - `/pcl_pose` 重定位结果显示
+  - `/planned_path` 路径显示
+  - `TF` 显示
+
+如果你想用 RViz 手动给初始位姿，推荐这样启动：
+
+```bash
+ros2 launch octo_planner my_robot_nav.launch.py \
+  launch_livox_driver:=true \
+  launch_fastlivo:=true \
+  launch_lidar_localization:=true \
+  launch_rviz:=true \
+  publish_static_odom_to_base:=false \
+  base_frame:=livox_frame \
+  lidar_localization_map_path:=/data/maps/site_a/site_a_global_map.pcd \
+  lidar_localization_set_initial_pose:=false
+```
+
+启动后在 RViz 里操作：
+
+1. 等 `/initial_map` 和 `/cloud_registered` 都开始显示。
+2. 在左侧工具栏选择 `2D Pose Estimate` / `SetInitialPose`。
+3. 在地图中先点位置，再拖出朝向。
+4. 观察 `/pcl_pose`、`map -> odom` 和 `map -> livox_frame` 是否稳定收敛。
+
+这条链的判断标准是：
+
+- 点完初始位姿后，`/pcl_pose` 很快开始稳定更新
+- `/cloud_registered` 与 `/initial_map` 的相对位置逐渐贴合
+- `map -> odom` 不再大幅跳变
+
 ### FAST-LIVO2 建图并导出全局点云地图
 
 `FAST-LIVO2` 这边已经具备建图和导出点云地图的能力。当前配置文件是：
@@ -375,6 +414,13 @@ pcd_save:
   导出前对地图点云做体素滤波，值越大文件越小、细节越少。
 - `interval`
   保存间隔控制。通常 `-1` 表示结束时统一输出，具体行为以上游实现为准。
+      pcd_save:
+      pcd_save_en: false
+      colmap_output_en: false # need to set interval = -1
+      filter_size_pcd: 0.15
+      interval: -1
+      # how many LiDAR frames saved in each pcd file;
+      # -1 : all frames will be saved in ONE pcd file, may lead to memory crash when having too much frames.
 
 推荐流程：
 
@@ -431,6 +477,17 @@ ros2 launch yhs_can_control yhs_can_control.launch.py
 - 终端 1：`yhs_can_control`
 - 终端 2：`my_robot_nav.launch.py`
 - 终端 3：`ros2 topic echo /ctrl_cmd`、`ros2 topic echo /cmd_vel`、`ros2 run tf2_ros tf2_echo map livox_frame` 做观测
+
+5. 雷达启动
+
+说明：当前 `MID360 + FAST-LIVO2` 组合要求 `livox_ros_driver2` 以 `xfer_format:=0` 启动，也就是 `Livox PointCloud2(PointXYZRTLT)` 格式，而不是 `CustomMsg`。
+
+```bash
+cd /home/yangxuan/ros2_ws/src
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch octo_planner mid360_driver.launch.py
+```
 
 ### 阶段 5：新增底盘桥接节点
 

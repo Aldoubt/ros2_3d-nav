@@ -342,6 +342,16 @@ void LIVMapper::initializeSubscribersAndPublishers(rclcpp::Node::SharedPtr &node
   pubImuPropOdom = this->node->create_publisher<nav_msgs::msg::Odometry>("/LIVO2/imu_propagate", 10000);
   imu_prop_timer = this->node->create_wall_timer(0.004s, std::bind(&LIVMapper::imu_prop_callback, this));
   voxelmap_manager->voxel_map_pub_= this->node->create_publisher<visualization_msgs::msg::MarkerArray>("/planes", 10000);
+
+  RCLCPP_INFO(
+    this->node->get_logger(),
+    "FAST-LIVO2 subscriptions ready. lidar_topic=%s imu_topic=%s world_frame=%s body_frame=%s img_en=%d lidar_type=%d",
+    lid_topic.c_str(),
+    imu_topic.c_str(),
+    world_frame.c_str(),
+    body_frame.c_str(),
+    img_en,
+    p_pre->lidar_type);
 }
 
 void LIVMapper::jpeg_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg)

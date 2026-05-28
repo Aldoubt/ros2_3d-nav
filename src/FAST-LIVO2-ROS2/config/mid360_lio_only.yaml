@@ -82,7 +82,7 @@
       pose_output_en: false
 
     pcd_save:
-      pcd_save_en: false
+      pcd_save_en: true
       colmap_output_en: false
       filter_size_pcd: 0.15
       interval: -1

@@ -31,6 +31,7 @@ __pycache__/
 *.bak
 *.orig
 *.rej
+.~lock.*
 .DS_Store
 Thumbs.db
 
@@ -47,3 +48,9 @@ Thumbs.db
 
 # Residual workspace metadata
 src/.git/
+
+# Exclude non-essential docs/assets from the initial monorepo import
+src/FAST-LIVO2-ROS2/Supplementary/
+src/FAST-LIVO2-ROS2/pics/
+src/rpg_vikit_ros2_fisheye/vikit_common/test/data/
+src/MK-mini-ros2/*.doc

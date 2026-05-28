@@ -12,7 +12,9 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     jie_octomap_share = get_package_share_directory("jie_octomap")
-    octomap_rviz_config = os.path.join(jie_octomap_share, "rviz", "octomap_test.rviz")
+    default_rviz_config = os.path.join(
+        jie_octomap_share, "rviz", "mid360_localization.rviz"
+    )
     web_root = os.path.join(jie_octomap_share, "web")
     web_server_script = os.path.abspath(
         os.path.join(
@@ -108,6 +110,14 @@ def generate_launch_description():
         "web_http_port",
         default_value="8080",
         description="HTTP port for the web viewer.",
+    )
+    rviz_config_path_arg = DeclareLaunchArgument(
+        "rviz_config_path",
+        default_value=default_rviz_config,
+        description=(
+            "RViz config path. The default profile includes /initialpose, "
+            "/cloud_registered, /initial_map, /pcl_pose and planning overlays."
+        ),
     )
     map_package_dir_arg = DeclareLaunchArgument(
         "map_package_dir",
@@ -289,7 +299,7 @@ def generate_launch_description():
             "config_path": LaunchConfiguration("livox_config_path"),
             "frame_id": base_frame,
             "publish_freq": LaunchConfiguration("livox_publish_freq"),
-            "xfer_format": "1",
+            "xfer_format": "0",
             "multi_topic": "0",
         }.items(),
     )
@@ -508,7 +518,7 @@ def generate_launch_description():
         executable="rviz2",
         name="rviz2",
         output="screen",
-        arguments=["-d", octomap_rviz_config],
+        arguments=["-d", LaunchConfiguration("rviz_config_path")],
         condition=IfCondition(LaunchConfiguration("launch_rviz")),
     )
 
@@ -548,6 +558,7 @@ def generate_launch_description():
             use_fake_localization_arg,
             publish_static_odom_to_base_arg,
             web_http_port_arg,
+            rviz_config_path_arg,
             map_package_dir_arg,
             map_frame_arg,
             odom_frame_arg,
