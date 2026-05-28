@@ -21,6 +21,9 @@ import lifecycle_msgs.msg
 
 def generate_launch_description():
     """Launch preset for Jetson + Livox MID-360 on legged robots."""
+    runtime_ld_library_path = (
+        '/usr/lib/x86_64-linux-gnu:' + os.environ.get('LD_LIBRARY_PATH', '')
+    )
 
     default_param = os.path.join(
         get_package_share_directory('lidar_localization_ros2'),
@@ -111,6 +114,7 @@ def generate_launch_description():
         namespace='',
         package='lidar_localization_ros2',
         executable='lidar_localization_node',
+        additional_env={'LD_LIBRARY_PATH': runtime_ld_library_path},
         parameters=[
             localization_param_dir,
             {

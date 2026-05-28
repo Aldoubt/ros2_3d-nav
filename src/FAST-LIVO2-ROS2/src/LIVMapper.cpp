@@ -11,6 +11,8 @@ which is included as part of this source code package.
 */
 
 #include "LIVMapper.h"
+#include <algorithm>
+#include <cctype>
 #include <vikit/camera_loader.h>
 #include <boost/filesystem.hpp>
 
@@ -188,6 +190,22 @@ void LIVMapper::readParameters(rclcpp::Node::SharedPtr &node)
   this->node->get_parameter("publish.pub_scan_num", pub_scan_num);
   this->node->get_parameter("publish.pub_effect_point_en", pub_effect_point_en);
   this->node->get_parameter("publish.dense_map_en", dense_map_en);
+
+  std::string seq_name_lower = seq_name;
+  std::transform(
+    seq_name_lower.begin(),
+    seq_name_lower.end(),
+    seq_name_lower.begin(),
+    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+  if (seq_name_lower.find("relocalization") != std::string::npos && pcd_save_en)
+  {
+    pcd_save_en = false;
+    RCLCPP_WARN(
+      this->node->get_logger(),
+      "seq_name=%s indicates relocalization mode; forcing pcd_save_en=false to avoid overwriting saved maps.",
+      seq_name.c_str());
+  }
 }
 
 void LIVMapper::initializeComponents(rclcpp::Node::SharedPtr &node) 

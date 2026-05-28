@@ -392,11 +392,19 @@ ros2 launch octo_planner my_robot_nav.launch.py \
 
 ### FAST-LIVO2 建图并导出全局点云地图
 
-`FAST-LIVO2` 这边已经具备建图和导出点云地图的能力。当前配置文件是：
+`FAST-LIVO2` 这边已经具备建图和导出点云地图的能力。建议把配置拆成两份：
 
 - `FAST-LIVO2-ROS2/config/mid360_lio_only.yaml`
+- `FAST-LIVO2-ROS2/config/mid360_lio_relocalization.yaml`
 
-里面现在的相关配置是：
+用途约定：
+
+- `mid360_lio_only.yaml`
+  用于建图阶段，会保存 PCD 地图。
+- `mid360_lio_relocalization.yaml`
+  用于重定位验证阶段，只提供 `/cloud_registered` 和 `odom -> livox_frame`，不覆盖已有地图。
+
+建图配置里的相关保存参数是：
 
 ```yaml
 pcd_save:
@@ -424,12 +432,12 @@ pcd_save:
 
 推荐流程：
 
-1. 先把 `pcd_save_en` 改成 `true`。
-2. 单独启动 `FAST-LIVO2` 做建图，不急着开重定位。
+1. 使用 `mid360_lio_only.yaml` 单独启动 `FAST-LIVO2` 做建图，不急着开重定位。
 3. 手动走完整个目标区域，尽量闭环、多方向覆盖。
 4. 正常结束节点后，到 `FAST-LIVO2` 的输出目录确认导出的地图文件。
 5. 对导出的地图做一次体素降采样或裁剪，得到更适合作为重定位输入的全局 `.pcd`。
-6. 把这个 `.pcd` 通过 `lidar_localization_map_path:=/absolute/path/to/map.pcd` 喂给重定位链。
+6. 重定位验证阶段切换到 `mid360_lio_relocalization.yaml`，避免继续写坏或覆盖已有 `.pcd`。
+7. 把建好的 `.pcd` 通过 `lidar_localization_map_path:=/absolute/path/to/map.pcd` 喂给重定位链。
 
 建议把“建图用原始大地图”和“重定位用精简地图”分开保存：
 

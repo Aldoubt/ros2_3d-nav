@@ -1,8 +1,11 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, ExecuteProcess
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
+from ament_index_python.packages import get_package_prefix
+import os
 
 
 def generate_launch_description():
@@ -10,6 +13,15 @@ def generate_launch_description():
     voxel_downsample_m = LaunchConfiguration("voxel_downsample_m")
     min_points_per_voxel = LaunchConfiguration("min_points_per_voxel")
     min_cluster_voxels = LaunchConfiguration("min_cluster_voxels")
+    pcd_file = LaunchConfiguration("pcd_file")
+    launch_import_gui = LaunchConfiguration("launch_import_gui")
+    default_import_gui_python = os.path.join(
+        os.path.expanduser("~"), "ros2_ws", ".venv-jie3d", "bin", "python"
+    )
+    import_gui_python = LaunchConfiguration("import_gui_python")
+    import_gui_script = os.path.join(
+        get_package_prefix("jie_octomap"), "lib", "jie_octomap", "pcd_map_import_gui"
+    )
 
     pcd_to_octomap_node = Node(
         package="jie_octomap",
@@ -19,6 +31,7 @@ def generate_launch_description():
         parameters=[
             {
                 "pcd_file_cmd_topic": "/pcd_file_cmd",
+                "pcd_file": pcd_file,
                 "octomap_topic": "/octomap",
                 "frame_id": "map",
                 "resolution": ParameterValue(resolution, value_type=float),
@@ -84,11 +97,11 @@ def generate_launch_description():
         output="screen",
     )
 
-    importer_gui_node = Node(
-        package="jie_octomap",
-        executable="pcd_map_import_gui",
-        name="pcd_map_import_gui",
+    importer_gui_node = ExecuteProcess(
+        cmd=[import_gui_python, import_gui_script],
         output="screen",
+        condition=IfCondition(launch_import_gui),
+        additional_env={"PYTHONNOUSERSITE": "1"},
     )
 
     return LaunchDescription(
@@ -97,6 +110,27 @@ def generate_launch_description():
                 "resolution",
                 default_value="0.5",
                 description="OctoMap resolution in meters for imported PCD maps.",
+            ),
+            DeclareLaunchArgument(
+                "pcd_file",
+                default_value="",
+                description=(
+                    "Optional absolute path to a PCD/PLY file. When set, pcd_to_octomap_node "
+                    "loads it directly without waiting for /pcd_file_cmd."
+                ),
+            ),
+            DeclareLaunchArgument(
+                "launch_import_gui",
+                default_value="true",
+                description="Whether to start the Python Open3D import GUI.",
+            ),
+            DeclareLaunchArgument(
+                "import_gui_python",
+                default_value=default_import_gui_python,
+                description=(
+                    "Python interpreter used to launch pcd_map_import_gui. "
+                    "Recommend pointing this to .venv-jie3d/bin/python."
+                ),
             ),
             DeclareLaunchArgument(
                 "voxel_downsample_m",
