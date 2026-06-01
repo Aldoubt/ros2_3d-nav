@@ -42,7 +42,6 @@ def generate_launch_description():
             Node(
                 package="fast_livo",
                 executable="fastlivo_mapping",
-                name="fastlivo_mapping",
                 output="screen",
                 additional_env={"LD_LIBRARY_PATH": runtime_ld_library_path},
                 parameters=[

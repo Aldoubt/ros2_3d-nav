@@ -1,0 +1,18 @@
+icp_relocalizer_node:
+  ros__parameters:
+    global_map_pcd: /home/yangxuan/ros2_ws/src/FAST-LIVO2-ROS2/Log/PCD/all_downsampled_points.pcd
+    global_frame: map
+    odom_frame: odom
+    tracking_frame: livox_frame
+    cloud_topic: /cloud_registered
+    initialpose_topic: /initialpose
+    max_correspondence_distance: 3.0
+    maximum_iterations: 100
+    transformation_epsilon: 1.0e-6
+    euclidean_fitness_epsilon: 1.0e-6
+    fitness_score_threshold: 2.0
+    map_voxel_leaf_size: 0.25
+    scan_voxel_leaf_size: 0.25
+    min_scan_points: 200
+    publish_tf: true
+    publish_aligned_cloud: true

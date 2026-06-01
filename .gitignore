@@ -54,3 +54,6 @@ src/FAST-LIVO2-ROS2/Supplementary/
 src/FAST-LIVO2-ROS2/pics/
 src/rpg_vikit_ros2_fisheye/vikit_common/test/data/
 src/MK-mini-ros2/*.doc
+src/map/syswaiwei.png
+.gitignore
+.gitignore
