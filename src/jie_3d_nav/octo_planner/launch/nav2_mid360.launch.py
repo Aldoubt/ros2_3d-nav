@@ -153,8 +153,15 @@ def generate_launch_description():
             {
                 "cmd_vel_topic": "/cmd_vel",
                 "ctrl_cmd_topic": "/ctrl_cmd",
+                "io_cmd_topic": "/io_cmd",
                 "wheel_base": LaunchConfiguration("wheel_base"),
                 "publish_rate": LaunchConfiguration("bridge_publish_rate"),
+                "forward_gear": 4,
+                "reverse_gear": 2,
+                "neutral_gear": 3,
+                "publish_io_cmd": True,
+                "io_cmd_enable": True,
+                "io_cmd_dis_charge": False,
             }
         ],
     )

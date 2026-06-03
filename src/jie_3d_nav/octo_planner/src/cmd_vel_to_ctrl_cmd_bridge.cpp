@@ -6,6 +6,7 @@
 #include "geometry_msgs/msg/twist.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "yhs_can_interfaces/msg/ctrl_cmd.hpp"
+#include "yhs_can_interfaces/msg/io_cmd.hpp"
 
 class CmdVelToCtrlCmdBridge : public rclcpp::Node
 {
@@ -15,18 +16,23 @@ public:
   {
     declare_parameter<std::string>("cmd_vel_topic", "/cmd_vel");
     declare_parameter<std::string>("ctrl_cmd_topic", "/ctrl_cmd");
+    declare_parameter<std::string>("io_cmd_topic", "/io_cmd");
     declare_parameter<double>("wheel_base", 0.6);
     declare_parameter<double>("publish_rate", 20.0);
     declare_parameter<double>("cmd_timeout_sec", 0.5);
     declare_parameter<double>("max_speed_mps", 1.0);
     declare_parameter<double>("max_steering_deg", 30.0);
     declare_parameter<double>("min_speed_for_steering", 0.05);
-    declare_parameter<int>("forward_gear", 1);
+    declare_parameter<int>("forward_gear", 4);
     declare_parameter<int>("reverse_gear", 2);
-    declare_parameter<int>("neutral_gear", 0);
+    declare_parameter<int>("neutral_gear", 3);
+    declare_parameter<bool>("publish_io_cmd", true);
+    declare_parameter<bool>("io_cmd_enable", true);
+    declare_parameter<bool>("io_cmd_dis_charge", false);
 
     const auto cmd_vel_topic = get_parameter("cmd_vel_topic").as_string();
     const auto ctrl_cmd_topic = get_parameter("ctrl_cmd_topic").as_string();
+    const auto io_cmd_topic = get_parameter("io_cmd_topic").as_string();
     const double publish_rate = std::max(1.0, get_parameter("publish_rate").as_double());
 
     cmd_vel_sub_ = create_subscription<geometry_msgs::msg::Twist>(
@@ -34,6 +40,7 @@ public:
       rclcpp::QoS(10).reliable(),
       std::bind(&CmdVelToCtrlCmdBridge::onCmdVel, this, std::placeholders::_1));
     ctrl_cmd_pub_ = create_publisher<yhs_can_interfaces::msg::CtrlCmd>(ctrl_cmd_topic, 10);
+    io_cmd_pub_ = create_publisher<yhs_can_interfaces::msg::IoCmd>(io_cmd_topic, 10);
 
     const auto period = std::chrono::duration<double>(1.0 / publish_rate);
     publish_timer_ = create_wall_timer(
@@ -44,10 +51,11 @@ public:
     RCLCPP_INFO(
       get_logger(),
       "cmd_vel_to_ctrl_cmd_bridge started. cmd_vel=%s ctrl_cmd=%s wheel_base=%.3f "
-      "max_speed=%.3f max_steering_deg=%.1f",
+      "io_cmd=%s max_speed=%.3f max_steering_deg=%.1f",
       cmd_vel_topic.c_str(),
       ctrl_cmd_topic.c_str(),
       get_parameter("wheel_base").as_double(),
+      io_cmd_topic.c_str(),
       get_parameter("max_speed_mps").as_double(),
       get_parameter("max_steering_deg").as_double());
   }
@@ -132,6 +140,19 @@ private:
   void publishCtrlCmd(const yhs_can_interfaces::msg::CtrlCmd & cmd)
   {
     ctrl_cmd_pub_->publish(cmd);
+    publishIoCmd();
+  }
+
+  void publishIoCmd()
+  {
+    if (!get_parameter("publish_io_cmd").as_bool()) {
+      return;
+    }
+
+    yhs_can_interfaces::msg::IoCmd io_cmd;
+    io_cmd.io_cmd_enable = get_parameter("io_cmd_enable").as_bool();
+    io_cmd.io_cmd_dis_charge = get_parameter("io_cmd_dis_charge").as_bool();
+    io_cmd_pub_->publish(io_cmd);
   }
 
   geometry_msgs::msg::Twist latest_cmd_vel_;
@@ -139,6 +160,7 @@ private:
   bool has_cmd_{false};
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
   rclcpp::Publisher<yhs_can_interfaces::msg::CtrlCmd>::SharedPtr ctrl_cmd_pub_;
+  rclcpp::Publisher<yhs_can_interfaces::msg::IoCmd>::SharedPtr io_cmd_pub_;
   rclcpp::TimerBase::SharedPtr publish_timer_;
 };
 

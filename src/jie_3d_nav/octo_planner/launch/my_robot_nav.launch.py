@@ -453,9 +453,9 @@ def generate_launch_description():
                 "max_speed_mps": 0.8,
                 "max_steering_deg": 25.0,
                 "min_speed_for_steering": 0.08,
-                "forward_gear": 1,
+                "forward_gear": 4,
                 "reverse_gear": 2,
-                "neutral_gear": 0,
+                "neutral_gear": 3,
             }
         ],
     )
