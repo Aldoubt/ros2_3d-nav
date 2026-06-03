@@ -26,7 +26,9 @@ def generate_launch_description():
     default_fast_livo_params = os.path.join(
         fast_livo_share, "config", "mid360_lio_only.yaml"
     )
-    default_rviz = os.path.join(fast_livo_share, "rviz_cfg", "fast_livo2.rviz")
+    default_rviz = os.path.join(
+        mid360_demo_share, "rviz", "mid360_online_mapping.rviz"
+    )
 
     return LaunchDescription(
         [
@@ -34,6 +36,7 @@ def generate_launch_description():
             DeclareLaunchArgument("launch_fast_livo", default_value="true"),
             DeclareLaunchArgument("launch_octomap", default_value="true"),
             DeclareLaunchArgument("launch_rviz", default_value="true"),
+            DeclareLaunchArgument("launch_tuning_gui", default_value="true"),
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument("fast_livo_params", default_value=default_fast_livo_params),
             DeclareLaunchArgument("cloud_topic", default_value="/cloud_registered"),
@@ -83,6 +86,13 @@ def generate_launch_description():
                 executable="rviz2",
                 name="rviz2",
                 arguments=["-d", LaunchConfiguration("rviz_config")],
+                output="screen",
+            ),
+            Node(
+                condition=IfCondition(LaunchConfiguration("launch_tuning_gui")),
+                package="mid360_nav_demo",
+                executable="octomap_tuning_gui.py",
+                name="octomap_tuning_gui",
                 output="screen",
             ),
         ]
