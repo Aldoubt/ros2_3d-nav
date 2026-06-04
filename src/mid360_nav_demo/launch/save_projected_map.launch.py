@@ -23,10 +23,10 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "map_subscribe_transient_local",
-                default_value="false",
+                default_value="true",
                 description=(
-                    "Use false for live /projected_map from octomap_server, "
-                    "which is usually published with volatile durability."
+                    "Use true when /projected_map is published with transient local "
+                    "durability so late subscribers can still receive the latest map."
                 ),
             ),
             DeclareLaunchArgument(

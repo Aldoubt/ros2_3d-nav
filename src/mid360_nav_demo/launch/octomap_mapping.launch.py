@@ -55,7 +55,9 @@ def generate_launch_description():
                         "filter_ground": ParameterValue(
                             LaunchConfiguration("filter_ground"), value_type=bool
                         ),
-                        "latch": False,
+                        # Keep the latest projected map available for late subscribers
+                        # such as RViz or map_saver_cli started after mapping begins.
+                        "latch": True,
                     }
                 ],
                 remappings=[

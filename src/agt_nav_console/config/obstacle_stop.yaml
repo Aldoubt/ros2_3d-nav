@@ -1,0 +1,8 @@
+/**:
+  ros__parameters:
+    front_angle_deg: 30.0
+    stop_distance_m: 0.8
+    slow_distance_m: 1.5
+    min_valid_range_m: 0.15
+    consecutive_stop_frames: 2
+    consecutive_clear_frames: 3

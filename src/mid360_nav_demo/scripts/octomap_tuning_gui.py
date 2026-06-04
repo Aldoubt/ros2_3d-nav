@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 
+import os
 import subprocess
+import sys
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 
-PARAMS = [
+HEIGHT_PARAMS = [
     ("pointcloud_min_z", -0.20, 1.00, 0.01),
     ("occupancy_min_z", -0.20, 1.00, 0.01),
     ("pointcloud_max_z", 0.20, 3.00, 0.05),
     ("occupancy_max_z", 0.20, 3.00, 0.05),
+]
+
+RANGE_PARAMS = [
+    ("sensor_model.max_range", 2.0, 80.0, 1.0),
 ]
 
 
@@ -48,39 +54,19 @@ class OctomapTuningGui:
             row=0, column=2, padx=4
         )
 
-        params = ttk.LabelFrame(root, text="Height Filters")
-        params.grid(row=1, column=0, sticky="ew", padx=10, pady=8)
-        params.columnconfigure(1, weight=1)
-        for row, (name, min_v, max_v, step) in enumerate(PARAMS):
-            var = tk.DoubleVar(value=0.0)
-            self.vars[name] = var
-            ttk.Label(params, text=name).grid(row=row, column=0, sticky="w")
-            scale = ttk.Scale(
-                params,
-                from_=min_v,
-                to=max_v,
-                variable=var,
-                command=lambda _value, n=name: self._update_value_label(n),
-            )
-            scale.grid(row=row, column=1, sticky="ew", padx=6)
-            label = ttk.Label(params, width=8)
-            label.grid(row=row, column=2, sticky="e")
-            self.labels[name] = label
-            ttk.Button(
-                params,
-                text="-",
-                width=3,
-                command=lambda n=name, s=step: self._nudge(n, -s),
-            ).grid(row=row, column=3, padx=1)
-            ttk.Button(
-                params,
-                text="+",
-                width=3,
-                command=lambda n=name, s=step: self._nudge(n, s),
-            ).grid(row=row, column=4, padx=1)
+        self._build_param_group(
+            row=1,
+            title="Height Filters",
+            param_specs=HEIGHT_PARAMS,
+        )
+        self._build_param_group(
+            row=2,
+            title="Projection / Range",
+            param_specs=RANGE_PARAMS,
+        )
 
         toggles = ttk.Frame(root)
-        toggles.grid(row=2, column=0, sticky="ew", padx=10, pady=4)
+        toggles.grid(row=3, column=0, sticky="ew", padx=10, pady=4)
         ttk.Checkbutton(
             toggles, text="filter_speckles", variable=self.filter_speckles
         ).grid(row=0, column=0, sticky="w", padx=4)
@@ -89,7 +75,7 @@ class OctomapTuningGui:
         ).grid(row=0, column=1, sticky="w", padx=4)
 
         actions = ttk.LabelFrame(root, text="Actions")
-        actions.grid(row=3, column=0, sticky="ew", padx=10, pady=8)
+        actions.grid(row=4, column=0, sticky="ew", padx=10, pady=8)
         actions.columnconfigure(0, weight=1)
         ttk.Button(actions, text="Apply Parameters", command=self.apply_params).grid(
             row=0, column=0, sticky="ew", padx=4, pady=4
@@ -104,7 +90,7 @@ class OctomapTuningGui:
         )
 
         save = ttk.LabelFrame(root, text="Save /projected_map")
-        save.grid(row=4, column=0, sticky="ew", padx=10, pady=8)
+        save.grid(row=5, column=0, sticky="ew", padx=10, pady=8)
         save.columnconfigure(1, weight=1)
         ttk.Label(save, text="topic").grid(row=0, column=0, sticky="w")
         ttk.Entry(save, textvariable=self.map_topic).grid(
@@ -126,7 +112,39 @@ class OctomapTuningGui:
         )
 
         status = ttk.Label(root, textvariable=self.status, anchor="w")
-        status.grid(row=5, column=0, sticky="ew", padx=10, pady=6)
+        status.grid(row=6, column=0, sticky="ew", padx=10, pady=6)
+
+    def _build_param_group(self, row, title, param_specs):
+        frame = ttk.LabelFrame(self.root, text=title)
+        frame.grid(row=row, column=0, sticky="ew", padx=10, pady=8)
+        frame.columnconfigure(1, weight=1)
+        for local_row, (name, min_v, max_v, step) in enumerate(param_specs):
+            var = tk.DoubleVar(value=0.0)
+            self.vars[name] = var
+            ttk.Label(frame, text=name).grid(row=local_row, column=0, sticky="w")
+            scale = ttk.Scale(
+                frame,
+                from_=min_v,
+                to=max_v,
+                variable=var,
+                command=lambda _value, n=name: self._update_value_label(n),
+            )
+            scale.grid(row=local_row, column=1, sticky="ew", padx=6)
+            label = ttk.Label(frame, width=8)
+            label.grid(row=local_row, column=2, sticky="e")
+            self.labels[name] = label
+            ttk.Button(
+                frame,
+                text="-",
+                width=3,
+                command=lambda n=name, s=step: self._nudge(n, -s),
+            ).grid(row=local_row, column=3, padx=1)
+            ttk.Button(
+                frame,
+                text="+",
+                width=3,
+                command=lambda n=name, s=step: self._nudge(n, s),
+            ).grid(row=local_row, column=4, padx=1)
 
     def _update_value_label(self, name):
         self.labels[name].configure(text=f"{self.vars[name].get():.2f}")
@@ -170,7 +188,7 @@ class OctomapTuningGui:
 
     def refresh_params(self):
         def worker():
-            for name, _min_v, _max_v, _step in PARAMS:
+            for name, _min_v, _max_v, _step in [*HEIGHT_PARAMS, *RANGE_PARAMS]:
                 try:
                     result = subprocess.run(
                         ["ros2", "param", "get", self.node_name.get(), name],
@@ -257,7 +275,7 @@ class OctomapTuningGui:
                 "pgm",
                 "--ros-args",
                 "-p",
-                "map_subscribe_transient_local:=false",
+                "map_subscribe_transient_local:=true",
                 "-p",
                 f"save_map_timeout:={self.timeout_sec.get()}",
             ]
@@ -266,7 +284,21 @@ class OctomapTuningGui:
 
 
 def main():
-    root = tk.Tk()
+    try:
+        root = tk.Tk()
+    except tk.TclError as exc:
+        display = os.environ.get("DISPLAY", "<unset>")
+        print(
+            "Failed to start MID360 Octomap Tuning GUI. "
+            f"DISPLAY={display}. tkinter error: {exc}",
+            file=sys.stderr,
+        )
+        print(
+            "If you are launching from a graphical desktop, make sure the shell "
+            "inherits the desktop DISPLAY/XAUTHORITY environment.",
+            file=sys.stderr,
+        )
+        raise
     OctomapTuningGui(root)
     root.mainloop()
 

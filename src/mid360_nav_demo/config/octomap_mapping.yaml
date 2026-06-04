@@ -10,4 +10,4 @@ octomap_server:
     occupancy_max_z: 1.0
     filter_speckles: true
     filter_ground: false
-    latch: false
+    latch: true

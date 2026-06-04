@@ -1,0 +1,6 @@
+/**:
+  ros__parameters:
+    default_estop_active: false
+    default_manual_enable: false
+    default_auto_enable: true
+    cmd_vel_timeout_sec: 0.5

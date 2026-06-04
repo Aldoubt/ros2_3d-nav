@@ -69,7 +69,7 @@ Visualization Manager:
       Name: Projected Map
       Topic:
         Depth: 1
-        Durability Policy: Volatile
+        Durability Policy: Transient Local
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /projected_map

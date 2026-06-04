@@ -36,6 +36,7 @@ __pycache__/
 Thumbs.db
 
 # Large runtime data and maps
+src/bags/
 *.bag
 *.bag2
 *.db3
