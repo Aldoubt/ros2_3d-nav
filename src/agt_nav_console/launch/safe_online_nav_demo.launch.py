@@ -47,7 +47,7 @@ def generate_launch_description():
         DeclareLaunchArgument("icp_params_file", default_value=default_icp_params),
         DeclareLaunchArgument(
             "global_map_pcd",
-            default_value="/home/yangxuan/ros2_ws/src/FAST-LIVO2-ROS2/Log/PCD/all_downsampled_points.pcd",
+            default_value="/home/yangxuan/ros2_ws/src/FAST-LIVO2-ROS2/Log/PCD/all_raw_points.pcd",
         ),
         DeclareLaunchArgument("cloud_topic", default_value="/cloud_registered"),
         DeclareLaunchArgument("global_frame", default_value="map"),

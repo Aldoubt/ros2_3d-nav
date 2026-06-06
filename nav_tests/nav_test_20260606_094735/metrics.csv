@@ -1,0 +1,1 @@
+stamp,wall_time,pose_x,pose_y,pose_z,yaw,linear_vel_x,linear_vel_y,linear_vel_z,angular_vel_z,cmd_linear_x,cmd_linear_y,cmd_angular_z,goal_x,goal_y,goal_z,goal_yaw,obstacle_stop

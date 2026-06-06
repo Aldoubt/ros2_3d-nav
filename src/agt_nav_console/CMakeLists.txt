@@ -65,6 +65,20 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}
 )
 
+install(PROGRAMS
+  scripts/offline_nav_test_feeder
+  scripts/offline_nav_test_feeder.py
+  scripts/build_ros_clean_env.sh
+  scripts/nav_ops_console
+  scripts/nav_ops_console.py
+  scripts/nav_test_recorder
+  scripts/nav_test_recorder.py
+  scripts/analyze_nav_test
+  scripts/analyze_nav_test.py
+  scripts/start_qt_gui.sh
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 install(FILES
   README.md
   DESTINATION share/${PROJECT_NAME}
