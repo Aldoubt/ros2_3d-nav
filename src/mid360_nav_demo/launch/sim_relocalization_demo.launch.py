@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -9,10 +10,23 @@ from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
 
 
+def _guess_workspace_root(*share_dirs: str) -> Path | None:
+    env_root = os.environ.get("ROS2_WS_ROOT")
+    if env_root:
+        return Path(env_root).expanduser().resolve()
+    for share_dir in share_dirs:
+        share_path = Path(share_dir).resolve()
+        if "install" in share_path.parts:
+            install_index = share_path.parts.index("install")
+            return Path(*share_path.parts[:install_index])
+    return None
+
+
 def generate_launch_description():
     pb_rm_share = get_package_share_directory("pb_rm_simulation")
     mid360_demo_share = get_package_share_directory("mid360_nav_demo")
     fast_livo_share = get_package_share_directory("fast_livo")
+    workspace_root = _guess_workspace_root(pb_rm_share, mid360_demo_share, fast_livo_share)
 
     simulation_launch = os.path.join(pb_rm_share, "launch", "rm_simulation.launch.py")
     robot_xacro = os.path.join(pb_rm_share, "urdf", "simulation_waking_robot.xacro")
@@ -28,6 +42,12 @@ def generate_launch_description():
     default_rviz = os.path.join(
         mid360_demo_share, "rviz", "mid360_sim_relocalization.rviz"
     )
+    default_sim_map = os.path.join(mid360_demo_share, "maps", "sim_test.yaml")
+    default_global_map_pcd = ""
+    if workspace_root is not None:
+        default_global_map_pcd = str(
+            workspace_root / "src" / "FAST-LIVO2-ROS2" / "Log" / "PCD" / "all_raw_points.pcd"
+        )
     return LaunchDescription(
         [
             DeclareLaunchArgument("launch_sim", default_value="true"),
@@ -42,11 +62,11 @@ def generate_launch_description():
             DeclareLaunchArgument("icp_params_file", default_value=default_icp_params),
             DeclareLaunchArgument(
                 "map",
-                default_value="/home/yangxuan/ros2_ws/src/mid360_nav_demo/maps/sim_test.yaml",
+                default_value=default_sim_map,
             ),
             DeclareLaunchArgument(
                 "global_map_pcd",
-                default_value="/home/yangxuan/ros2_ws/src/FAST-LIVO2-ROS2/Log/PCD/all_raw_points.pcd",
+                default_value=default_global_map_pcd,
             ),
             DeclareLaunchArgument("cloud_topic", default_value="/cloud_registered"),
             DeclareLaunchArgument("global_frame", default_value="map"),

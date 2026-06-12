@@ -93,6 +93,21 @@ def generate_launch_description():
         default_value="30.0",
         description="Publish rate from /cmd_vel to /ctrl_cmd for the physical chassis.",
     )
+    cmd_vel_topic_arg = DeclareLaunchArgument(
+        "cmd_vel_topic",
+        default_value="/cmd_vel",
+        description="Twist topic consumed by cmd_vel_to_ctrl_cmd_bridge.",
+    )
+    ctrl_cmd_topic_arg = DeclareLaunchArgument(
+        "ctrl_cmd_topic",
+        default_value="/ctrl_cmd",
+        description="CtrlCmd topic published to the chassis interface.",
+    )
+    io_cmd_topic_arg = DeclareLaunchArgument(
+        "io_cmd_topic",
+        default_value="/io_cmd",
+        description="IoCmd topic published to the chassis interface.",
+    )
     disable_dynamic_obstacles_arg = DeclareLaunchArgument(
         "disable_dynamic_obstacles",
         default_value="false",
@@ -218,9 +233,9 @@ def generate_launch_description():
         output="screen",
         parameters=[
             {
-                "cmd_vel_topic": "/cmd_vel",
-                "ctrl_cmd_topic": "/ctrl_cmd",
-                "io_cmd_topic": "/io_cmd",
+                "cmd_vel_topic": LaunchConfiguration("cmd_vel_topic"),
+                "ctrl_cmd_topic": LaunchConfiguration("ctrl_cmd_topic"),
+                "io_cmd_topic": LaunchConfiguration("io_cmd_topic"),
                 "wheel_base": LaunchConfiguration("wheel_base"),
                 "publish_rate": LaunchConfiguration("bridge_publish_rate"),
                 "forward_gear": 4,
@@ -258,6 +273,9 @@ def generate_launch_description():
             chassis_params_file_arg,
             wheel_base_arg,
             bridge_publish_rate_arg,
+            cmd_vel_topic_arg,
+            ctrl_cmd_topic_arg,
+            io_cmd_topic_arg,
             disable_dynamic_obstacles_arg,
             local_inflation_radius_arg,
             global_inflation_radius_arg,

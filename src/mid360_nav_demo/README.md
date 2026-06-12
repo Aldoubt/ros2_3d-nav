@@ -1,113 +1,207 @@
-# MID360 Nav Demo
+# mid360_nav_demo
 
-ROS2 demo package for online MID360 mapping, projected map saving, ICP relocalization, and Nav2 navigation.
+`mid360_nav_demo` 是当前工作空间里围绕 `Livox MID360` 组织的建图、地图导出、重定位和原始导航演示包。它负责承接底层传感器与定位导航主链，是总控 GUI 和 `agt_nav_console` 之下最核心的业务入口之一。
 
-## Mapping
+如果把整个工作空间理解成一套完整系统，那么这个包更偏“底层业务主链”，而 `agt_nav_console` 更偏“上层组织与联调入口”。
+
+## 包定位
+
+当前 `mid360_nav_demo` 主要负责：
+
+- 在线建图
+- 二维投影地图保存
+- 全局点云地图驱动的重定位
+- 原始导航链启动
+- MID360 场景下的导航联调 demo
+
+## 核心能力
+
+### 1. 在线建图
+
+当前建图主入口：
+
+- `launch/online_mapping_demo.launch.py`
+
+推荐启动：
 
 ```bash
-source /home/yangxuan/ros2_ws/src/install/setup.bash
+export WS_ROOT=/path/to/your/ros2_ws
+export ROS_DISTRO=${ROS_DISTRO:-humble}
+
+source "/opt/ros/${ROS_DISTRO}/setup.bash"
+source "${WS_ROOT}/install/setup.bash"
+
 ros2 launch mid360_nav_demo online_mapping_demo.launch.py
 ```
 
-The mapping demo starts:
+这条链路通常会启动：
 
 - `livox_ros_driver2`
 - `fast_livo`
-- `octomap_server`, remapped from `/cloud_registered` to `/projected_map`
-- RViz
+- `octomap_server`
+- `RViz`
 
-FAST-LIVO2 saves PCD files under `FAST-LIVO2-ROS2/Log/PCD` when enabled by its parameter file.
+建图完成后，`FAST-LIVO2` 会按其参数配置输出点云地图，常见输出目录在：
 
-## Save 2D Map
+- `src/FAST-LIVO2-ROS2/Log/PCD/`
+
+### 2. 二维地图保存
+
+当前地图保存主入口：
+
+- `launch/save_projected_map.launch.py`
+
+推荐启动：
 
 ```bash
-source /home/yangxuan/ros2_ws/src/install/setup.bash
+source "/opt/ros/${ROS_DISTRO}/setup.bash"
+source "${WS_ROOT}/install/setup.bash"
+
 ros2 launch mid360_nav_demo save_projected_map.launch.py \
-  map_prefix:=/home/yangxuan/ros2_ws/src/mid360_nav_demo/maps/site1
+  map_prefix:="${HOME}/maps/example_site"
 ```
 
-This calls `nav2_map_server map_saver_cli` on `/projected_map` and writes `site1.pgm` plus `site1.yaml`.
-The launch subscribes with volatile QoS and waits up to 20 seconds, which matches
-live `/projected_map` output from `octomap_server`.
+这条链路会调用 `nav2_map_server map_saver_cli`，把 `/projected_map` 保存为：
 
-## Gazebo Simulation Smoke Test
+- `example_site.pgm`
+- `example_site.yaml`
 
-There is a usable MID360 CustomMsg simulation path on GitHub:
+### 3. 在线重定位与原始导航链
 
-- `LCAS/livox_laser_simulation_ros2`: Gazebo Classic Livox plugin publishing both `livox_ros_driver2/msg/CustomMsg` and `sensor_msgs/msg/PointCloud2`.
-- `LihanChen2004/PB_RMSimulation`: example robot/world using the MID360 plugin on `/livox/lidar` and IMU on `/livox/imu`.
+当前原始导航主入口：
 
-This machine already has those packages under `/home/yangxuan/ws_livox` and `/home/yangxuan/ros2_ws_test/PB_RMSimulation`. Source them before this workspace, then launch the simulation chain:
+- `launch/online_nav_demo.launch.py`
 
-```bash
-source /home/yangxuan/ros2_ws_test/PB_RMSimulation/install/setup.bash
-source /home/yangxuan/ros2_ws/src/install/setup.bash
-ros2 launch mid360_nav_demo sim_mapping_demo.launch.py
-```
-
-The simulation launch uses `config/mid360_lio_sim_custom.yaml`. This is intentional:
-the Gazebo MID360 plugin publishes `/livox/lidar` as `livox_ros_driver2/msg/CustomMsg`,
-and this FAST-LIVO2 codebase selects the CustomMsg callback with `preprocess.lidar_type: 1`.
-By default the simulated MID360 is mounted at `lidar_xyz:="0.12 0.0 0.175"`,
-matching the original PB_RMSimulation xacro.
-If ground points dominate the view, raise the sensor or narrow the octomap height
-slice, for example:
+推荐启动：
 
 ```bash
-ros2 launch mid360_nav_demo sim_mapping_demo.launch.py \
-  lidar_xyz:="0.12 0.0 0.65" \
-  pointcloud_min_z:=0.20 \
-  occupancy_min_z:=0.20 \
-  pointcloud_max_z:=1.30 \
-  occupancy_max_z:=1.30 \
-  launch_rviz:=true
-```
+source "/opt/ros/${ROS_DISTRO}/setup.bash"
+source "${WS_ROOT}/install/setup.bash"
 
-Expected simulation topics:
-
-- `/livox/lidar`: `livox_ros_driver2/msg/CustomMsg`, consumed by FAST-LIVO2.
-- `/livox/imu`: simulated IMU, consumed by FAST-LIVO2.
-- `/cloud_registered`: FAST-LIVO2 registered cloud.
-- `/projected_map`: octomap 2D projection.
-
-Useful checks:
-
-```bash
-ros2 topic info /livox/lidar
-ros2 topic hz /livox/lidar
-ros2 topic hz /cloud_registered
-ros2 topic info /projected_map -v
-ros2 topic echo /projected_map --once --field info
-```
-
-## Navigation
-
-```bash
-source /home/yangxuan/ros2_ws/src/install/setup.bash
 ros2 launch mid360_nav_demo online_nav_demo.launch.py \
-  map:=/home/yangxuan/ros2_ws/src/mid360_nav_demo/maps/site1.yaml \
-  global_map_pcd:=/home/yangxuan/ros2_ws/src/FAST-LIVO2-ROS2/Log/PCD/all_downsampled_points.pcd
+  map:="${WS_ROOT}/src/mid360_nav_demo/maps/example_site.yaml" \
+  global_map_pcd:="${WS_ROOT}/src/FAST-LIVO2-ROS2/Log/PCD/all_downsampled_points.pcd"
 ```
 
-In RViz, publish `2D Pose Estimate` to trigger ICP relocalization. The node publishes:
+这条链路通常会启动：
 
-- `map -> odom`
-- `/relocalization/aligned_cloud`
-- `/relocalization/status`
+- `livox_ros_driver2`
+- `FAST-LIVO2`
+- `icp_relocalizer_node`
+- `Nav2`
+- 可选 RViz
+- 可选底盘桥接
 
-Optional chassis output can be enabled with:
+其中：
+
+- `FAST-LIVO2` 负责在线里程计与配准点云
+- ICP 重定位负责建立 `map -> odom`
+- `Nav2` 负责规划和控制输出
+
+### 4. 可选底盘输出
+
+如果只是验证导航链，可以先不开底盘输出。
+
+如果要把导航速度继续送到底盘桥接层，可以启用：
 
 ```bash
 ros2 launch mid360_nav_demo online_nav_demo.launch.py \
-  launch_cmd_bridge:=true launch_chassis:=true
+  launch_cmd_bridge:=true \
+  launch_chassis:=true
 ```
 
-## Important Frames
+### 5. 仿真链路
 
-The first demo version assumes FAST-LIVO2 publishes odometry as `odom -> livox_frame`, and ICP publishes `map -> odom`. Nav2 therefore sees:
+当前包也保留了一套 MID360 仿真建图链，便于没有实机时做基础冒烟验证。
+
+主入口：
+
+- `launch/sim_mapping_demo.launch.py`
+
+如果本机已经准备好相关仿真工作区，可按需 source 后再启动这一条链路。
+
+## 当前链路中的关键 TF
+
+当前这套 demo 默认假设：
+
+- `FAST-LIVO2` 发布 `odom -> livox_frame`
+- ICP 重定位发布 `map -> odom`
+
+因此当前导航主链重点依赖：
 
 ```text
 map -> odom -> livox_frame
 ```
 
-If the chassis later provides a stable `base_link`, set `tracking_frame:=base_link` and update Nav2 params accordingly.
+如果后续底盘侧提供稳定的 `base_link`，则可以再把跟踪坐标系切换到 `base_link`。
+
+## 与总控 GUI 的关系
+
+这个包本身提供“建图、保存、重定位、导航”的业务能力，而总控 GUI 主要通过以下入口调用它：
+
+- `online_mapping_demo.launch.py`
+- `save_projected_map.launch.py`
+- `online_nav_demo.launch.py`
+
+也就是说：
+
+- `mid360_nav_demo` 负责底层业务
+- `agt_nav_console` 负责流程组织、上层控制和安全链补充
+
+## 关键文件
+
+- `launch/online_mapping_demo.launch.py`
+  在线建图入口
+- `launch/save_projected_map.launch.py`
+  二维地图保存入口
+- `launch/online_nav_demo.launch.py`
+  原始导航链入口
+- `launch/icp_relocalizer.launch.py`
+  ICP 重定位单独入口
+- `config/icp_relocalizer.yaml`
+  ICP 重定位参数
+- `maps/`
+  当前保存的二维导航地图目录
+
+## 推荐使用方式
+
+### 1. 只做建图与地图导出
+
+适合首次采图、重建地图、生成导航用地图：
+
+1. 启动 `online_mapping_demo.launch.py`
+2. 完成现场建图
+3. 调用 `save_projected_map.launch.py`
+4. 导出或整理 `.pcd` 地图
+
+### 2. 只做原始导航链验证
+
+适合不经过总控 GUI，先验证定位、TF 和 Nav2 是否正常：
+
+1. 准备 `map yaml`
+2. 准备 `global_map_pcd`
+3. 启动 `online_nav_demo.launch.py`
+4. 在 RViz 或 Qt GUI 中设置初始位姿并下发目标点
+
+### 3. 与总控 GUI 配合使用
+
+如果你现在的主工作流是总控 GUI，那么这个包通常不需要单独直接操作，而是作为下层被调用：
+
+- 建图阶段由总控 GUI 拉起 `online_mapping_demo`
+- 保存阶段由总控 GUI 拉起 `save_projected_map`
+- 导航阶段由总控 GUI 或安全链拉起 `online_nav_demo`
+
+## 迁移与二开提示
+
+后续迁移和二次开发时，建议优先注意：
+
+- 地图和点云路径尽量通过 launch 参数传入
+- 不要继续把本机绝对路径写回源码
+- 地图目录和运行时数据目录尽量与源码分离
+- TF、topic、tracking frame 的调整优先走参数化方式
+
+## 参考文档
+
+- [README.md](/home/yangxuan/ros2_ws/README.md:1)
+- [导航测试流程.md](/home/yangxuan/ros2_ws/导航测试流程.md:1)
+- [迁移与二开整改清单.md](/home/yangxuan/ros2_ws/迁移与二开整改清单.md:1)

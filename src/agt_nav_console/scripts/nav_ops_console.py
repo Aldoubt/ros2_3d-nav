@@ -15,8 +15,20 @@ import yaml
 from tkinter import filedialog, messagebox, ttk
 
 
-WS_ROOT = Path("/home/yangxuan/ros2_ws")
-ROS_SETUP = "/opt/ros/humble/setup.bash"
+def _workspace_root() -> Path:
+    env_root = os.environ.get("ROS2_WS_ROOT")
+    if env_root:
+        return Path(env_root).expanduser().resolve()
+    return Path(__file__).resolve().parents[3]
+
+
+def _ros_setup_path() -> str:
+    ros_distro = os.environ.get("ROS_DISTRO", "humble")
+    return f"/opt/ros/{ros_distro}/setup.bash"
+
+
+WS_ROOT = _workspace_root()
+ROS_SETUP = _ros_setup_path()
 WS_SETUP = str(WS_ROOT / "install" / "setup.bash")
 FAST_LIVO_RAW_PCD = WS_ROOT / "src" / "FAST-LIVO2-ROS2" / "Log" / "PCD" / "all_raw_points.pcd"
 DEFAULT_MAP_PREFIX = WS_ROOT / "src" / "mid360_nav_demo" / "maps" / "site1"
@@ -24,7 +36,7 @@ DEFAULT_MAP_YAML = WS_ROOT / "src" / "mid360_nav_demo" / "maps" / "site1.yaml"
 DEFAULT_GLOBAL_PCD = FAST_LIVO_RAW_PCD
 DEFAULT_NAV2_PARAMS = WS_ROOT / "src" / "jie_3d_nav" / "octo_planner" / "config" / "nav2_mid360_params.yaml"
 DEFAULT_QT_GUI_DIR = WS_ROOT / "src" / "Ros_Qt5_Gui_App"
-DEFAULT_RECORD_ROOT = Path("/tmp/nav_tests")
+DEFAULT_RECORD_ROOT = Path(os.environ.get("NAV_TEST_RECORD_ROOT", str(WS_ROOT / "nav_tests")))
 
 
 def bash_command(command: str) -> list[str]:

@@ -95,7 +95,7 @@ public:
   {
     global_map_pcd_ = declare_parameter<std::string>(
       "global_map_pcd",
-      "/home/yangxuan/ros2_ws/src/FAST-LIVO2-ROS2/Log/PCD/all_downsampled_points.pcd");
+      "");
     global_frame_ = declare_parameter<std::string>("global_frame", "map");
     odom_frame_ = declare_parameter<std::string>("odom_frame", "odom");
     tracking_frame_ = declare_parameter<std::string>("tracking_frame", "livox_frame");

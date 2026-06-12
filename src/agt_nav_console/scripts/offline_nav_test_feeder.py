@@ -6,6 +6,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 import rclpy
@@ -13,6 +14,22 @@ from geometry_msgs.msg import PoseStamped, Twist
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from std_msgs.msg import Bool
+import yaml
+
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+DEFAULT_TOPIC_CONFIG = SCRIPT_DIR.parent / "config" / "topic_mapping.yaml"
+
+
+def load_topic_mapping(config_path: Path) -> dict[str, str]:
+    try:
+        with open(config_path, "r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle) or {}
+    except OSError as exc:
+        raise SystemExit(f"Failed to read topic config: {config_path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise SystemExit(f"Topic config must be a YAML mapping: {config_path}")
+    return {str(key): value for key, value in data.items()}
 
 
 def quaternion_from_yaw(yaw: float) -> tuple[float, float, float, float]:
@@ -155,7 +172,11 @@ class FeederGui:
         ttk.Label(frame, text="离线导航话题发布器", font=("TkDefaultFont", 14, "bold")).pack(anchor=tk.W)
         ttk.Label(
             frame,
-            text="持续发布 /aft_mapped_to_init、/cmd_vel_safe、/goal_pose、/agt/obstacle_stop，配合 nav_test_recorder 做本地联调。",
+            text=(
+                f"持续发布 {self.feeder.args.odom_topic}、{self.feeder.args.cmd_topic}、"
+                f"{self.feeder.args.goal_topic}、{self.feeder.args.obstacle_topic}，"
+                "配合 nav_test_recorder 做本地联调。"
+            ),
         ).pack(anchor=tk.W, pady=(4, 10))
 
         grid = ttk.Frame(frame)
@@ -252,19 +273,35 @@ class FeederGui:
 
 
 def parse_args() -> argparse.Namespace:
+    bootstrap = argparse.ArgumentParser(add_help=False)
+    bootstrap.add_argument(
+        "--topic-config",
+        default=str(DEFAULT_TOPIC_CONFIG),
+        help="YAML file that defines the platform topic/frame mapping.",
+    )
+    bootstrap_args, remaining_argv = bootstrap.parse_known_args()
+    topic_mapping = load_topic_mapping(Path(bootstrap_args.topic_config))
+
     parser = argparse.ArgumentParser(
         description="GUI helper for publishing fake nav topics during offline testing."
     )
-    parser.add_argument("--odom-topic", default="/aft_mapped_to_init")
-    parser.add_argument("--cmd-topic", default="/cmd_vel_safe")
-    parser.add_argument("--goal-topic", default="/goal_pose")
-    parser.add_argument("--obstacle-topic", default="/agt/obstacle_stop")
-    parser.add_argument("--frame-id", default="map")
-    parser.add_argument("--child-frame-id", default="base_link")
+    parser.add_argument(
+        "--topic-config",
+        default=str(DEFAULT_TOPIC_CONFIG),
+        help="YAML file that defines the platform topic/frame mapping.",
+    )
+    parser.add_argument("--odom-topic", default=topic_mapping["odom_topic"])
+    parser.add_argument("--cmd-topic", default=topic_mapping["safe_cmd_topic"])
+    parser.add_argument("--goal-topic", default=topic_mapping["goal_topic"])
+    parser.add_argument("--obstacle-topic", default=topic_mapping["obstacle_stop_topic"])
+    parser.add_argument("--frame-id", default=topic_mapping["odom_frame_id"])
+    parser.add_argument("--child-frame-id", default=topic_mapping["base_frame_id"])
     parser.add_argument("--odom-rate", type=float, default=10.0)
     parser.add_argument("--cmd-rate", type=float, default=5.0)
     parser.add_argument("--obstacle-rate", type=float, default=2.0)
-    return parser.parse_args()
+    args = parser.parse_args(remaining_argv)
+    args.topic_mapping = load_topic_mapping(Path(args.topic_config))
+    return args
 
 
 def main() -> int:

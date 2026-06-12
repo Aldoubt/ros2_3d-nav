@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -7,12 +8,38 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node, SetRemap
+import yaml
+
+
+def _guess_workspace_root(*share_dirs: str) -> Path | None:
+    env_root = os.environ.get("ROS2_WS_ROOT")
+    if env_root:
+        return Path(env_root).expanduser().resolve()
+    for share_dir in share_dirs:
+        share_path = Path(share_dir).resolve()
+        if "install" in share_path.parts:
+            install_index = share_path.parts.index("install")
+            return Path(*share_path.parts[:install_index])
+    return None
+
+
+def _load_topic_mapping(package_share_dir: str) -> dict[str, str]:
+    config_path = Path(package_share_dir) / "config" / "topic_mapping.yaml"
+    with open(config_path, "r", encoding="utf-8") as handle:
+        data = yaml.safe_load(handle) or {}
+    if not isinstance(data, dict):
+        raise RuntimeError(f"topic_mapping.yaml must contain a YAML mapping: {config_path}")
+    return {str(key): value for key, value in data.items()}
 
 
 def generate_launch_description():
     agt_nav_console_share = get_package_share_directory("agt_nav_console")
     mid360_demo_share = get_package_share_directory("mid360_nav_demo")
     octo_planner_share = get_package_share_directory("octo_planner")
+    topic_mapping = _load_topic_mapping(agt_nav_console_share)
+    workspace_root = _guess_workspace_root(
+        agt_nav_console_share, mid360_demo_share, octo_planner_share
+    )
 
     online_nav_demo_launch = os.path.join(
         mid360_demo_share, "launch", "online_nav_demo.launch.py"
@@ -31,6 +58,11 @@ def generate_launch_description():
     default_icp_params = os.path.join(
         mid360_demo_share, "config", "icp_relocalizer.yaml"
     )
+    default_global_map_pcd = ""
+    if workspace_root is not None:
+        default_global_map_pcd = str(
+            workspace_root / "src" / "FAST-LIVO2-ROS2" / "Log" / "PCD" / "all_raw_points.pcd"
+        )
 
     declare_args = [
         DeclareLaunchArgument("launch_driver", default_value="true"),
@@ -50,22 +82,43 @@ def generate_launch_description():
         DeclareLaunchArgument("icp_params_file", default_value=default_icp_params),
         DeclareLaunchArgument(
             "global_map_pcd",
-            default_value="/home/yangxuan/ros2_ws/src/FAST-LIVO2-ROS2/Log/PCD/all_raw_points.pcd",
+            default_value=default_global_map_pcd,
         ),
-        DeclareLaunchArgument("cloud_topic", default_value="/cloud_registered"),
-        DeclareLaunchArgument("global_frame", default_value="map"),
-        DeclareLaunchArgument("odom_frame", default_value="odom"),
-        DeclareLaunchArgument("tracking_frame", default_value="livox_frame"),
+        DeclareLaunchArgument("cloud_topic", default_value=topic_mapping["cloud_topic"]),
+        DeclareLaunchArgument("global_frame", default_value=topic_mapping["global_frame_id"]),
+        DeclareLaunchArgument("odom_frame", default_value=topic_mapping["odom_frame_id"]),
+        DeclareLaunchArgument("tracking_frame", default_value=topic_mapping["tracking_frame_id"]),
         DeclareLaunchArgument("chassis_params_file", default_value=os.path.join(
             get_package_share_directory("yhs_can_control"), "params", "cfg.yaml"
         )),
         DeclareLaunchArgument("launch_obstacle_stop", default_value="true"),
         DeclareLaunchArgument("use_cloud_to_scan", default_value="true"),
-        DeclareLaunchArgument("scan_topic", default_value="/scan"),
+        DeclareLaunchArgument("scan_topic", default_value=topic_mapping["scan_topic"]),
+        DeclareLaunchArgument("nav_cmd_topic", default_value=topic_mapping["nav_cmd_topic"]),
+        DeclareLaunchArgument("manual_cmd_topic", default_value=topic_mapping["manual_cmd_topic"]),
+        DeclareLaunchArgument("safe_cmd_topic", default_value=topic_mapping["safe_cmd_topic"]),
+        DeclareLaunchArgument("ctrl_cmd_topic", default_value=topic_mapping["ctrl_cmd_topic"]),
+        DeclareLaunchArgument("io_cmd_topic", default_value=topic_mapping["io_cmd_topic"]),
+        DeclareLaunchArgument(
+            "obstacle_stop_topic", default_value=topic_mapping["obstacle_stop_topic"]
+        ),
+        DeclareLaunchArgument(
+            "obstacle_distance_topic", default_value=topic_mapping["obstacle_distance_topic"]
+        ),
+        DeclareLaunchArgument(
+            "manual_enable_topic", default_value=topic_mapping["manual_enable_topic"]
+        ),
+        DeclareLaunchArgument(
+            "auto_enable_topic", default_value=topic_mapping["auto_enable_topic"]
+        ),
+        DeclareLaunchArgument("set_estop_service", default_value=topic_mapping["set_estop_service"]),
+        DeclareLaunchArgument(
+            "clear_estop_service", default_value=topic_mapping["clear_estop_service"]
+        ),
     ]
 
     online_nav_demo = GroupAction([
-        SetRemap(src="/cmd_vel", dst="/agt/cmd_vel_nav"),
+        SetRemap(src="/cmd_vel", dst=LaunchConfiguration("nav_cmd_topic")),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(online_nav_demo_launch),
             launch_arguments={
@@ -104,6 +157,16 @@ def generate_launch_description():
                 "use_sim_time": LaunchConfiguration("use_sim_time"),
             },
         ],
+        remappings=[
+            ("/agt/cmd_vel_manual", LaunchConfiguration("manual_cmd_topic")),
+            ("/agt/cmd_vel_nav", LaunchConfiguration("nav_cmd_topic")),
+            ("/agt/obstacle_stop", LaunchConfiguration("obstacle_stop_topic")),
+            ("/agt/manual_enable", LaunchConfiguration("manual_enable_topic")),
+            ("/agt/auto_enable", LaunchConfiguration("auto_enable_topic")),
+            ("/cmd_vel_safe", LaunchConfiguration("safe_cmd_topic")),
+            ("/agt/set_estop", LaunchConfiguration("set_estop_service")),
+            ("/agt/clear_estop", LaunchConfiguration("clear_estop_service")),
+        ],
     )
 
     obstacle_stop = IncludeLaunchDescription(
@@ -114,6 +177,8 @@ def generate_launch_description():
             "cloud_topic": LaunchConfiguration("cloud_topic"),
             "scan_topic": LaunchConfiguration("scan_topic"),
             "target_frame": LaunchConfiguration("tracking_frame"),
+            "obstacle_stop_topic": LaunchConfiguration("obstacle_stop_topic"),
+            "obstacle_distance_topic": LaunchConfiguration("obstacle_distance_topic"),
         }.items(),
     )
 
@@ -124,9 +189,9 @@ def generate_launch_description():
         output="screen",
         parameters=[
             {
-                "cmd_vel_topic": "/cmd_vel_safe",
-                "ctrl_cmd_topic": "/ctrl_cmd",
-                "io_cmd_topic": "/io_cmd",
+                "cmd_vel_topic": LaunchConfiguration("safe_cmd_topic"),
+                "ctrl_cmd_topic": LaunchConfiguration("ctrl_cmd_topic"),
+                "io_cmd_topic": LaunchConfiguration("io_cmd_topic"),
                 "wheel_base": LaunchConfiguration("wheel_base"),
                 "publish_rate": LaunchConfiguration("bridge_publish_rate"),
                 "forward_gear": 4,

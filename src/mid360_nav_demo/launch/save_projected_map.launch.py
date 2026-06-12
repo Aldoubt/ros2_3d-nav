@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess
 from launch.substitutions import LaunchConfiguration
@@ -13,7 +15,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "map_prefix",
-                default_value="/home/yangxuan/ros2_ws/src/mid360_nav_demo/maps/mid360_map",
+                default_value=str(Path.home() / "maps" / "mid360_map"),
                 description="Output map path without extension.",
             ),
             DeclareLaunchArgument(

@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -7,12 +8,39 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+import yaml
+
+
+def _guess_workspace_root(*share_dirs: str) -> Path | None:
+    env_root = os.environ.get("ROS2_WS_ROOT")
+    if env_root:
+        return Path(env_root).expanduser().resolve()
+    for share_dir in share_dirs:
+        share_path = Path(share_dir).resolve()
+        if "install" in share_path.parts:
+            install_index = share_path.parts.index("install")
+            return Path(*share_path.parts[:install_index])
+    return None
+
+
+def _load_topic_mapping() -> dict[str, str]:
+    agt_nav_console_share = get_package_share_directory("agt_nav_console")
+    config_path = Path(agt_nav_console_share) / "config" / "topic_mapping.yaml"
+    with open(config_path, "r", encoding="utf-8") as handle:
+        data = yaml.safe_load(handle) or {}
+    if not isinstance(data, dict):
+        raise RuntimeError(f"topic_mapping.yaml must contain a YAML mapping: {config_path}")
+    return {str(key): value for key, value in data.items()}
 
 
 def generate_launch_description():
     octo_planner_share = get_package_share_directory("octo_planner")
     fast_livo_share = get_package_share_directory("fast_livo")
     mid360_demo_share = get_package_share_directory("mid360_nav_demo")
+    topic_mapping = _load_topic_mapping()
+    workspace_root = _guess_workspace_root(
+        octo_planner_share, fast_livo_share, mid360_demo_share
+    )
 
     mid360_driver_launch = os.path.join(
         octo_planner_share, "launch", "mid360_driver.launch.py"
@@ -33,6 +61,16 @@ def generate_launch_description():
     default_icp_params = os.path.join(
         mid360_demo_share, "config", "icp_relocalizer.yaml"
     )
+    default_global_map_pcd = ""
+    if workspace_root is not None:
+        default_global_map_pcd = str(
+            workspace_root
+            / "src"
+            / "FAST-LIVO2-ROS2"
+            / "Log"
+            / "PCD"
+            / "all_downsampled_points.pcd"
+        )
 
     return LaunchDescription(
         [
@@ -53,12 +91,15 @@ def generate_launch_description():
             DeclareLaunchArgument("icp_params_file", default_value=default_icp_params),
             DeclareLaunchArgument(
                 "global_map_pcd",
-                default_value="/home/yangxuan/ros2_ws/src/FAST-LIVO2-ROS2/Log/PCD/all_downsampled_points.pcd",
+                default_value=default_global_map_pcd,
             ),
-            DeclareLaunchArgument("cloud_topic", default_value="/cloud_registered"),
-            DeclareLaunchArgument("global_frame", default_value="map"),
-            DeclareLaunchArgument("odom_frame", default_value="odom"),
-            DeclareLaunchArgument("tracking_frame", default_value="livox_frame"),
+            DeclareLaunchArgument("cloud_topic", default_value=topic_mapping["cloud_topic"]),
+            DeclareLaunchArgument("global_frame", default_value=topic_mapping["global_frame_id"]),
+            DeclareLaunchArgument("odom_frame", default_value=topic_mapping["odom_frame_id"]),
+            DeclareLaunchArgument("tracking_frame", default_value=topic_mapping["tracking_frame_id"]),
+            DeclareLaunchArgument("cmd_vel_topic", default_value="/cmd_vel"),
+            DeclareLaunchArgument("ctrl_cmd_topic", default_value=topic_mapping["ctrl_cmd_topic"]),
+            DeclareLaunchArgument("io_cmd_topic", default_value=topic_mapping["io_cmd_topic"]),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(mid360_driver_launch),
                 condition=IfCondition(LaunchConfiguration("launch_driver")),
@@ -102,6 +143,9 @@ def generate_launch_description():
                     "launch_cmd_bridge": LaunchConfiguration("launch_cmd_bridge"),
                     "launch_chassis": LaunchConfiguration("launch_chassis"),
                     "bridge_publish_rate": LaunchConfiguration("bridge_publish_rate"),
+                    "cmd_vel_topic": LaunchConfiguration("cmd_vel_topic"),
+                    "ctrl_cmd_topic": LaunchConfiguration("ctrl_cmd_topic"),
+                    "io_cmd_topic": LaunchConfiguration("io_cmd_topic"),
                     "disable_dynamic_obstacles": LaunchConfiguration("disable_dynamic_obstacles"),
                     "local_inflation_radius": LaunchConfiguration("local_inflation_radius"),
                     "global_inflation_radius": LaunchConfiguration("global_inflation_radius"),

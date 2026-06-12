@@ -1,6 +1,6 @@
 icp_relocalizer_node:
   ros__parameters:
-    global_map_pcd: /home/yangxuan/ros2_ws/src/FAST-LIVO2-ROS2/Log/PCD/all_downsampled_points.pcd
+    global_map_pcd: ""
     global_frame: map
     odom_frame: odom
     tracking_frame: livox_frame

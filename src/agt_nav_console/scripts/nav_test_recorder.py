@@ -20,24 +20,40 @@ from geometry_msgs.msg import PoseStamped, Twist
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from std_msgs.msg import Bool
+import yaml
 
 
-DEFAULT_TOPICS = [
-    "/aft_mapped_to_init",
-    "/cmd_vel_safe",
-    "/goal_pose",
-    "/agt/obstacle_stop",
-]
+SCRIPT_DIR = Path(__file__).resolve().parent
+DEFAULT_TOPIC_CONFIG = SCRIPT_DIR.parent / "config" / "topic_mapping.yaml"
 
-TOPIC_PROFILES = {
-    "lite": list(DEFAULT_TOPICS),
-    "debug": list(DEFAULT_TOPICS)
-    + [
-        "/cloud_registered",
-        "/plan",
-        "/local_plan",
-    ],
-}
+
+def load_topic_mapping(config_path: Path) -> Dict[str, str]:
+    try:
+        with open(config_path, "r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle) or {}
+    except OSError as exc:
+        raise SystemExit(f"Failed to read topic config: {config_path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise SystemExit(f"Topic config must be a YAML mapping: {config_path}")
+    return {str(key): value for key, value in data.items()}
+
+
+def build_topic_profiles(topic_mapping: Dict[str, str]) -> Dict[str, list[str]]:
+    default_topics = [
+        topic_mapping["odom_topic"],
+        topic_mapping["safe_cmd_topic"],
+        topic_mapping["goal_topic"],
+        topic_mapping["obstacle_stop_topic"],
+    ]
+    return {
+        "lite": list(default_topics),
+        "debug": list(default_topics)
+        + [
+            topic_mapping["cloud_topic"],
+            topic_mapping["global_path_topic"],
+            topic_mapping["local_path_topic"],
+        ],
+    }
 
 
 def iso_now() -> str:
@@ -438,15 +454,30 @@ class NavTestRecorder(Node):
 def build_topic_list(args: argparse.Namespace) -> list[str]:
     if args.topics:
         return list(dict.fromkeys(args.topics))
-    selected = list(TOPIC_PROFILES[args.profile])
+    selected = list(args.topic_profiles[args.profile])
     if args.extra_topics:
         selected.extend(args.extra_topics)
     return list(dict.fromkeys(selected))
 
 
 def parse_args() -> argparse.Namespace:
+    bootstrap = argparse.ArgumentParser(add_help=False)
+    bootstrap.add_argument(
+        "--topic-config",
+        default=str(DEFAULT_TOPIC_CONFIG),
+        help="YAML file that defines the platform topic/frame mapping.",
+    )
+    bootstrap_args, remaining_argv = bootstrap.parse_known_args()
+
+    default_topic_mapping = load_topic_mapping(Path(bootstrap_args.topic_config))
+    default_topic_profiles = build_topic_profiles(default_topic_mapping)
     parser = argparse.ArgumentParser(
         description="Record navigation test artifacts, rosbag, and manual event marks."
+    )
+    parser.add_argument(
+        "--topic-config",
+        default=str(DEFAULT_TOPIC_CONFIG),
+        help="YAML file that defines the platform topic/frame mapping.",
     )
     parser.add_argument(
         "--output-root",
@@ -458,13 +489,13 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Optional test directory name. Defaults to nav_test_YYYYmmdd_HHMMSS.",
     )
-    parser.add_argument("--odom-topic", default="/aft_mapped_to_init")
-    parser.add_argument("--cmd-vel-topic", default="/cmd_vel_safe")
-    parser.add_argument("--goal-topic", default="/goal_pose")
-    parser.add_argument("--obstacle-topic", default="/agt/obstacle_stop")
+    parser.add_argument("--odom-topic", default=default_topic_mapping["odom_topic"])
+    parser.add_argument("--cmd-vel-topic", default=default_topic_mapping["safe_cmd_topic"])
+    parser.add_argument("--goal-topic", default=default_topic_mapping["goal_topic"])
+    parser.add_argument("--obstacle-topic", default=default_topic_mapping["obstacle_stop_topic"])
     parser.add_argument(
         "--profile",
-        choices=sorted(TOPIC_PROFILES.keys()),
+        choices=sorted(default_topic_profiles.keys()),
         default="lite",
         help="Built-in rosbag topic preset. Defaults to lite.",
     )
@@ -490,7 +521,9 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Start rosbag recording immediately when GUI mode opens.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(remaining_argv)
+    args.topic_mapping = load_topic_mapping(Path(args.topic_config))
+    args.topic_profiles = build_topic_profiles(args.topic_mapping)
     args.topics = build_topic_list(args)
     return args
 

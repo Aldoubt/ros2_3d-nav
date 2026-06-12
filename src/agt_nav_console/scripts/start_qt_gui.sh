@@ -4,6 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WS_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+ROS_DISTRO_NAME="${ROS_DISTRO:-humble}"
 
 APP_DIR="${1:-${ROS_QT5_GUI_APP_DIR:-}}"
 
@@ -28,7 +29,7 @@ source_if_exists() {
   fi
 }
 
-source_if_exists /opt/ros/humble/setup.bash
+source_if_exists "/opt/ros/${ROS_DISTRO_NAME}/setup.bash"
 source_if_exists "${WS_ROOT}/install/setup.bash"
 
 if [[ -x "${APP_DIR}/build/start.sh" ]]; then

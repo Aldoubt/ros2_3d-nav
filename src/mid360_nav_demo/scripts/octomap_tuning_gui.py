@@ -5,6 +5,7 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 
@@ -27,7 +28,7 @@ class OctomapTuningGui:
         self.node_name = tk.StringVar(value="/octomap_server")
         self.map_topic = tk.StringVar(value="/projected_map")
         self.map_prefix = tk.StringVar(
-            value="/home/yangxuan/ros2_ws/src/mid360_nav_demo/maps/tuned_map"
+            value=str(Path.home() / "maps" / "tuned_map")
         )
         self.timeout_sec = tk.StringVar(value="20.0")
         self.filter_speckles = tk.BooleanVar(value=True)

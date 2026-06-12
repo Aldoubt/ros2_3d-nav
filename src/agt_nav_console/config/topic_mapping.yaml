@@ -1,12 +1,25 @@
 map_topic: /map
 odom_topic: /aft_mapped_to_init
 odom_topic_note: FAST-LIVO publishes /aft_mapped_to_init in the current navigation chain
+cloud_topic: /cloud_registered
 scan_topic: /scan
 initial_pose_topic: /initialpose
 goal_topic: /goal_pose
+nav_cmd_topic: /agt/cmd_vel_nav
 manual_cmd_topic: /agt/cmd_vel_manual
 safe_cmd_topic: /cmd_vel_safe
+ctrl_cmd_topic: /ctrl_cmd
+io_cmd_topic: /io_cmd
+obstacle_stop_topic: /agt/obstacle_stop
+obstacle_distance_topic: /agt/obstacle_distance
+manual_enable_topic: /agt/manual_enable
+auto_enable_topic: /agt/auto_enable
+set_estop_service: /agt/set_estop
+clear_estop_service: /agt/clear_estop
 global_path_topic: /plan
 local_path_topic: /local_plan
 robot_footprint_topic: /local_costmap/published_footprint
+global_frame_id: map
+odom_frame_id: odom
 base_frame_id: livox_frame
+tracking_frame_id: livox_frame
