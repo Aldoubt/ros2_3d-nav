@@ -46,6 +46,8 @@ src/bags/
 *.bin
 *.xyz
 *.lvx
+src/mid360_nav_demo/maps/*
+!src/mid360_nav_demo/maps/.gitkeep
 
 # Residual workspace metadata
 src/.git/

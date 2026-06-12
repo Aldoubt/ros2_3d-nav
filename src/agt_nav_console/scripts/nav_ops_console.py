@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Callable, Dict, Optional
 
 import tkinter as tk
+import yaml
 from tkinter import filedialog, messagebox, ttk
 
 
@@ -21,6 +22,7 @@ FAST_LIVO_RAW_PCD = WS_ROOT / "src" / "FAST-LIVO2-ROS2" / "Log" / "PCD" / "all_r
 DEFAULT_MAP_PREFIX = WS_ROOT / "src" / "mid360_nav_demo" / "maps" / "site1"
 DEFAULT_MAP_YAML = WS_ROOT / "src" / "mid360_nav_demo" / "maps" / "site1.yaml"
 DEFAULT_GLOBAL_PCD = FAST_LIVO_RAW_PCD
+DEFAULT_NAV2_PARAMS = WS_ROOT / "src" / "jie_3d_nav" / "octo_planner" / "config" / "nav2_mid360_params.yaml"
 DEFAULT_QT_GUI_DIR = WS_ROOT / "src" / "Ros_Qt5_Gui_App"
 DEFAULT_RECORD_ROOT = Path("/tmp/nav_tests")
 
@@ -114,6 +116,12 @@ class NavOpsConsole:
         self.qt_gui_dir_var = tk.StringVar(value=str(DEFAULT_QT_GUI_DIR))
         self.nav_map_yaml_var = tk.StringVar(value=str(DEFAULT_MAP_YAML))
         self.nav_global_pcd_var = tk.StringVar(value=str(DEFAULT_GLOBAL_PCD))
+        self.nav2_params_file_var = tk.StringVar(value=str(DEFAULT_NAV2_PARAMS))
+        self.local_inflation_radius_var = tk.StringVar(value="")
+        self.global_inflation_radius_var = tk.StringVar(value="")
+        self.nav2_inflation_hint_var = tk.StringVar(value="")
+        self.nav_launch_mode_var = tk.StringVar(value="safe")
+        self.disable_dynamic_obstacles_var = tk.BooleanVar(value=False)
         self.record_root_var = tk.StringVar(value=str(DEFAULT_RECORD_ROOT))
         self.record_name_var = tk.StringVar(value=f"nav_run_{time.strftime('%Y%m%d_%H%M%S')}")
         self.record_profile_var = tk.StringVar(value="debug")
@@ -208,24 +216,56 @@ class NavOpsConsole:
         ttk.Entry(panel, textvariable=self.nav_global_pcd_var).grid(row=2, column=1, sticky="ew", padx=6)
         ttk.Button(panel, text="选择", command=lambda: self._pick_file(self.nav_global_pcd_var, [("PCD", "*.pcd")])).grid(row=2, column=2)
 
-        ttk.Label(panel, text="记录输出目录").grid(row=3, column=0, sticky="w")
-        ttk.Entry(panel, textvariable=self.record_root_var).grid(row=3, column=1, sticky="ew", padx=6)
-        ttk.Button(panel, text="选择", command=lambda: self._pick_dir(self.record_root_var)).grid(row=3, column=2)
+        ttk.Label(panel, text="Nav2 参数文件").grid(row=3, column=0, sticky="w")
+        ttk.Entry(panel, textvariable=self.nav2_params_file_var).grid(row=3, column=1, sticky="ew", padx=6)
+        ttk.Button(panel, text="选择", command=lambda: self._pick_file(self.nav2_params_file_var, [("YAML", "*.yaml")])).grid(row=3, column=2)
 
-        ttk.Label(panel, text="测试名称").grid(row=4, column=0, sticky="w")
-        ttk.Entry(panel, textvariable=self.record_name_var).grid(row=4, column=1, sticky="ew", padx=6)
-        ttk.Frame(panel).grid(row=4, column=2)
+        ttk.Label(panel, text="局部膨胀半径").grid(row=4, column=0, sticky="w")
+        ttk.Entry(panel, textvariable=self.local_inflation_radius_var).grid(row=4, column=1, sticky="ew", padx=6)
+        ttk.Label(panel, text="单位 m；留空则沿用参数文件").grid(row=4, column=2, sticky="w")
 
-        ttk.Label(panel, text="录制预设").grid(row=5, column=0, sticky="w")
+        ttk.Label(panel, text="全局膨胀半径").grid(row=5, column=0, sticky="w")
+        ttk.Entry(panel, textvariable=self.global_inflation_radius_var).grid(row=5, column=1, sticky="ew", padx=6)
+        ttk.Label(panel, textvariable=self.nav2_inflation_hint_var, justify=tk.LEFT).grid(row=5, column=2, sticky="w")
+
+        ttk.Label(panel, text="导航启动模式").grid(row=6, column=0, sticky="w")
+        ttk.Combobox(
+            panel,
+            textvariable=self.nav_launch_mode_var,
+            values=["safe", "raw"],
+            state="readonly",
+        ).grid(row=6, column=1, sticky="w", padx=6)
+        ttk.Label(
+            panel,
+            text="safe=总控安全链，raw=与你手工 online_nav_demo 一致",
+            justify=tk.LEFT,
+        ).grid(row=6, column=2, sticky="w")
+
+        ttk.Label(panel, text="动态障碍物").grid(row=7, column=0, sticky="w")
+        ttk.Checkbutton(
+            panel,
+            text="关闭动态障碍物更新，只保留静态地图",
+            variable=self.disable_dynamic_obstacles_var,
+        ).grid(row=7, column=1, columnspan=2, sticky="w", padx=6)
+
+        ttk.Label(panel, text="记录输出目录").grid(row=8, column=0, sticky="w")
+        ttk.Entry(panel, textvariable=self.record_root_var).grid(row=8, column=1, sticky="ew", padx=6)
+        ttk.Button(panel, text="选择", command=lambda: self._pick_dir(self.record_root_var)).grid(row=8, column=2)
+
+        ttk.Label(panel, text="测试名称").grid(row=9, column=0, sticky="w")
+        ttk.Entry(panel, textvariable=self.record_name_var).grid(row=9, column=1, sticky="ew", padx=6)
+        ttk.Frame(panel).grid(row=9, column=2)
+
+        ttk.Label(panel, text="录制预设").grid(row=10, column=0, sticky="w")
         ttk.Combobox(
             panel,
             textvariable=self.record_profile_var,
             values=["lite", "debug"],
             state="readonly",
-        ).grid(row=5, column=1, sticky="w", padx=6)
+        ).grid(row=10, column=1, sticky="w", padx=6)
 
         button_row = ttk.Frame(panel)
-        button_row.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(10, 0))
+        button_row.grid(row=11, column=0, columnspan=3, sticky="ew", pady=(10, 0))
         ttk.Button(button_row, text="启动 Qt GUI", command=self.start_qt_gui).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(button_row, text="启动导航模式", command=self.start_navigation_mode).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(button_row, text="启动记录器", command=self.start_recorder).pack(side=tk.LEFT, padx=(0, 8))
@@ -316,8 +356,10 @@ class NavOpsConsole:
     def _setup_auto_backfill(self) -> None:
         self.map_prefix_var.trace_add("write", lambda *_args: self._sync_map_yaml_from_prefix())
         self.export_pcd_var.trace_add("write", lambda *_args: self._sync_pcd_path_from_export())
+        self.nav2_params_file_var.trace_add("write", lambda *_args: self._refresh_nav2_inflation_hint())
         self._sync_map_yaml_from_prefix()
         self._sync_pcd_path_from_export()
+        self._refresh_nav2_inflation_hint()
 
     def _sync_map_yaml_from_prefix(self) -> None:
         prefix = self.map_prefix_var.get().strip()
@@ -330,6 +372,30 @@ class NavOpsConsole:
         if not export_path:
             return
         self.nav_global_pcd_var.set(export_path)
+
+    def _refresh_nav2_inflation_hint(self) -> None:
+        params_path = Path(self.nav2_params_file_var.get().strip())
+        if not params_path.exists():
+            self.nav2_inflation_hint_var.set("参数文件不存在")
+            return
+        try:
+            with open(params_path, "r", encoding="utf-8") as f:
+                params = yaml.safe_load(f) or {}
+            local_radius = (
+                params["local_costmap"]["local_costmap"]["ros__parameters"]["inflation_layer"][
+                    "inflation_radius"
+                ]
+            )
+            global_radius = (
+                params["global_costmap"]["global_costmap"]["ros__parameters"]["inflation_layer"][
+                    "inflation_radius"
+                ]
+            )
+            self.nav2_inflation_hint_var.set(
+                f"文件当前值: local={local_radius} m, global={global_radius} m"
+            )
+        except Exception as exc:
+            self.nav2_inflation_hint_var.set(f"读取膨胀半径失败: {exc}")
 
     def backfill_navigation_paths(self) -> None:
         self._sync_map_yaml_from_prefix()
@@ -457,18 +523,59 @@ class NavOpsConsole:
             return
         map_yaml = Path(self.nav_map_yaml_var.get())
         global_pcd = Path(self.nav_global_pcd_var.get())
+        nav2_params = Path(self.nav2_params_file_var.get())
+        launch_mode = self.nav_launch_mode_var.get().strip() or "safe"
+        disable_dynamic_obstacles = self.disable_dynamic_obstacles_var.get()
+        local_inflation_radius = self.local_inflation_radius_var.get().strip()
+        global_inflation_radius = self.global_inflation_radius_var.get().strip()
         if not map_yaml.exists():
             messagebox.showerror("导航地图不存在", f"找不到地图 YAML：{map_yaml}")
             return
         if not global_pcd.exists():
             messagebox.showerror("重定位地图不存在", f"找不到点云地图：{global_pcd}")
             return
-        command = bash_command(
-            "ros2 launch agt_nav_console safe_online_nav_demo.launch.py "
-            f"map:={map_yaml} "
-            f"global_map_pcd:={global_pcd} "
-            "launch_rviz:=true launch_chassis:=true bridge_publish_rate:=30.0"
+        if not nav2_params.exists():
+            messagebox.showerror("Nav2 参数文件不存在", f"找不到 Nav2 参数文件：{nav2_params}")
+            return
+        for label, value in [
+            ("局部膨胀半径", local_inflation_radius),
+            ("全局膨胀半径", global_inflation_radius),
+        ]:
+            if not value:
+                continue
+            try:
+                float(value)
+            except ValueError:
+                messagebox.showerror("膨胀半径格式错误", f"{label} 需要填写数字，当前值：{value}")
+                return
+        disable_dynamic_obstacles_arg = (
+            " disable_dynamic_obstacles:=true" if disable_dynamic_obstacles else ""
         )
+        local_inflation_arg = (
+            f" local_inflation_radius:={local_inflation_radius}" if local_inflation_radius else ""
+        )
+        global_inflation_arg = (
+            f" global_inflation_radius:={global_inflation_radius}" if global_inflation_radius else ""
+        )
+        if launch_mode == "raw":
+            command = bash_command(
+                "ros2 launch mid360_nav_demo online_nav_demo.launch.py "
+                f"map:={map_yaml} "
+                f"nav2_params_file:={nav2_params} "
+                f"global_map_pcd:={global_pcd} "
+                "launch_rviz:=true launch_cmd_bridge:=true "
+                "launch_chassis:=true bridge_publish_rate:=30.0"
+                f"{disable_dynamic_obstacles_arg}{local_inflation_arg}{global_inflation_arg}"
+            )
+        else:
+            command = bash_command(
+                "ros2 launch agt_nav_console safe_online_nav_demo.launch.py "
+                f"map:={map_yaml} "
+                f"nav2_params_file:={nav2_params} "
+                f"global_map_pcd:={global_pcd} "
+                "launch_rviz:=true launch_chassis:=true bridge_publish_rate:=30.0"
+                f"{disable_dynamic_obstacles_arg}{local_inflation_arg}{global_inflation_arg}"
+            )
         proc = ManagedProcess(
             "nav_mode",
             command,
@@ -477,7 +584,12 @@ class NavOpsConsole:
             self._on_process_exit,
         )
         self._register_process("nav", proc)
-        self._set_status("导航模式已启动。")
+        self._set_status(
+            "导航模式已启动"
+            f"（{launch_mode}，dynamic_obstacles={'off' if disable_dynamic_obstacles else 'on'}，"
+            f"local_inflation={local_inflation_radius or 'yaml'}，"
+            f"global_inflation={global_inflation_radius or 'yaml'}）。"
+        )
 
     def start_recorder(self) -> None:
         if "recorder" in self.processes and self.processes["recorder"].is_running():

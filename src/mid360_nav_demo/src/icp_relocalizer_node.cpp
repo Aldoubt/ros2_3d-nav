@@ -5,6 +5,7 @@
 
 #include <Eigen/Geometry>
 #include <pcl/common/transforms.h>
+#include <pcl/filters/crop_box.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_cloud.h>
@@ -112,6 +113,14 @@ public:
     maximum_iterations_ = declare_parameter<int>("maximum_iterations", 100);
     publish_tf_ = declare_parameter<bool>("publish_tf", true);
     publish_aligned_cloud_ = declare_parameter<bool>("publish_aligned_cloud", true);
+    crop_box_enabled_ = declare_parameter<bool>("crop_box_enabled", true);
+    crop_box_frame_ = declare_parameter<std::string>("crop_box_frame", "tracking");
+    crop_x_min_ = declare_parameter<double>("crop_x_min", -0.5);
+    crop_x_max_ = declare_parameter<double>("crop_x_max", 30.0);
+    crop_y_min_ = declare_parameter<double>("crop_y_min", -15.0);
+    crop_y_max_ = declare_parameter<double>("crop_y_max", 15.0);
+    crop_z_min_ = declare_parameter<double>("crop_z_min", -2.0);
+    crop_z_max_ = declare_parameter<double>("crop_z_max", 2.0);
 
     if (!loadGlobalMap()) {
       RCLCPP_WARN(
@@ -135,8 +144,10 @@ public:
 
     RCLCPP_INFO(
       get_logger(),
-      "ICP relocalizer ready. cloud_topic=%s initialpose_topic=%s global_map_pcd=%s",
-      cloud_topic_.c_str(), initialpose_topic_.c_str(), global_map_pcd_.c_str());
+      "ICP relocalizer ready. cloud_topic=%s initialpose_topic=%s global_map_pcd=%s "
+      "crop_box_enabled=%d crop_box_frame=%s",
+      cloud_topic_.c_str(), initialpose_topic_.c_str(), global_map_pcd_.c_str(),
+      crop_box_enabled_, crop_box_frame_.c_str());
   }
 
 private:
@@ -170,6 +181,60 @@ private:
     latest_cloud_msg_ = msg;
   }
 
+  CloudT::Ptr cropScanForRelocalization(
+    const CloudT::Ptr & scan, const std::string & cloud_frame, const rclcpp::Time & stamp)
+  {
+    if (!crop_box_enabled_) {
+      return scan;
+    }
+
+    const bool use_tracking_frame_crop =
+      (crop_box_frame_ == "tracking" || crop_box_frame_ == tracking_frame_);
+    CloudT::Ptr crop_input(new CloudT(*scan));
+    Eigen::Matrix4f tracking_from_cloud = Eigen::Matrix4f::Identity();
+    bool transformed_to_tracking = false;
+
+    if (use_tracking_frame_crop && !cloud_frame.empty() && cloud_frame != tracking_frame_) {
+      try {
+        const auto tracking_from_cloud_msg = tf_buffer_.lookupTransform(
+          tracking_frame_, cloud_frame, stamp, std::chrono::milliseconds(200));
+        tracking_from_cloud = transformMsgToEigen(tracking_from_cloud_msg);
+        pcl::transformPointCloud(*scan, *crop_input, tracking_from_cloud);
+        transformed_to_tracking = true;
+      } catch (const tf2::TransformException & ex) {
+        RCLCPP_WARN(
+          get_logger(),
+          "Crop box skipped because %s -> %s lookup failed: %s",
+          tracking_frame_.c_str(), cloud_frame.c_str(), ex.what());
+        return scan;
+      }
+    }
+
+    CloudT::Ptr cropped(new CloudT);
+    pcl::CropBox<PointT> crop_box;
+    crop_box.setMin(
+      Eigen::Vector4f(
+        static_cast<float>(crop_x_min_), static_cast<float>(crop_y_min_),
+        static_cast<float>(crop_z_min_), 1.0f));
+    crop_box.setMax(
+      Eigen::Vector4f(
+        static_cast<float>(crop_x_max_), static_cast<float>(crop_y_max_),
+        static_cast<float>(crop_z_max_), 1.0f));
+    crop_box.setInputCloud(crop_input);
+    crop_box.filter(*cropped);
+
+    if (transformed_to_tracking) {
+      CloudT::Ptr cloud_frame_cropped(new CloudT);
+      pcl::transformPointCloud(*cropped, *cloud_frame_cropped, tracking_from_cloud.inverse());
+      cropped = cloud_frame_cropped;
+    }
+
+    RCLCPP_INFO_THROTTLE(
+      get_logger(), *get_clock(), 3000,
+      "Relocalization crop kept %zu / %zu points", cropped->size(), scan->size());
+    return cropped;
+  }
+
   void initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg)
   {
     if (!global_map_ || global_map_->empty()) {
@@ -201,6 +266,9 @@ private:
       voxel.filter(*filtered);
       scan = filtered;
     }
+
+    scan = cropScanForRelocalization(
+      scan, cloud_msg->header.frame_id, rclcpp::Time(cloud_msg->header.stamp));
 
     if (static_cast<int>(scan->size()) < min_scan_points_) {
       publishStatus("failed: scan has too few points");
@@ -312,6 +380,14 @@ private:
   int maximum_iterations_;
   bool publish_tf_;
   bool publish_aligned_cloud_;
+  bool crop_box_enabled_;
+  std::string crop_box_frame_;
+  double crop_x_min_;
+  double crop_x_max_;
+  double crop_y_min_;
+  double crop_y_max_;
+  double crop_z_min_;
+  double crop_z_max_;
 
   CloudT::Ptr global_map_;
   sensor_msgs::msg::PointCloud2::SharedPtr latest_cloud_msg_;

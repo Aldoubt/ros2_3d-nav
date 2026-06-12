@@ -16,3 +16,11 @@ icp_relocalizer_node:
     min_scan_points: 200
     publish_tf: true
     publish_aligned_cloud: true
+    crop_box_enabled: true
+    crop_box_frame: tracking
+    crop_x_min: 0.0
+    crop_x_max: 30.0
+    crop_y_min: -15.0
+    crop_y_max: 15.0
+    crop_z_min: -2.0
+    crop_z_max: 2.0

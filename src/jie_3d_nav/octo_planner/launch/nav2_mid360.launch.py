@@ -1,8 +1,11 @@
 import os
+import tempfile
+
+import yaml
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, SetLaunchConfiguration
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
@@ -90,6 +93,70 @@ def generate_launch_description():
         default_value="30.0",
         description="Publish rate from /cmd_vel to /ctrl_cmd for the physical chassis.",
     )
+    disable_dynamic_obstacles_arg = DeclareLaunchArgument(
+        "disable_dynamic_obstacles",
+        default_value="false",
+        description="Disable pointcloud-driven local/global costmap obstacle updates and keep only the static map.",
+    )
+    local_inflation_radius_arg = DeclareLaunchArgument(
+        "local_inflation_radius",
+        default_value="",
+        description="Optional override for local_costmap inflation_layer.inflation_radius in meters.",
+    )
+    global_inflation_radius_arg = DeclareLaunchArgument(
+        "global_inflation_radius",
+        default_value="",
+        description="Optional override for global_costmap inflation_layer.inflation_radius in meters.",
+    )
+    effective_params_file_arg = DeclareLaunchArgument(
+        "effective_params_file",
+        default_value="",
+        description="Internal rewritten params file used by launch.",
+    )
+
+    def prepare_params_file(context, *_args, **_kwargs):
+        params_file = LaunchConfiguration("params_file").perform(context)
+        disable_dynamic_obstacles = (
+            LaunchConfiguration("disable_dynamic_obstacles").perform(context).lower() == "true"
+        )
+        local_inflation_radius = LaunchConfiguration("local_inflation_radius").perform(context).strip()
+        global_inflation_radius = LaunchConfiguration("global_inflation_radius").perform(context).strip()
+        effective_params_file = params_file
+
+        if disable_dynamic_obstacles or local_inflation_radius or global_inflation_radius:
+            with open(params_file, "r", encoding="utf-8") as f:
+                params = yaml.safe_load(f)
+
+            local_costmap_params = params["local_costmap"]["local_costmap"]["ros__parameters"]
+            global_costmap_params = params["global_costmap"]["global_costmap"]["ros__parameters"]
+            if disable_dynamic_obstacles:
+                local_costmap_params["plugins"] = ["inflation_layer"]
+                if "voxel_layer" in local_costmap_params:
+                    local_costmap_params["voxel_layer"]["enabled"] = False
+
+                global_costmap_params["plugins"] = ["static_layer", "inflation_layer"]
+                if "obstacle_layer" in global_costmap_params:
+                    global_costmap_params["obstacle_layer"]["enabled"] = False
+
+            if local_inflation_radius:
+                local_costmap_params["inflation_layer"]["inflation_radius"] = float(
+                    local_inflation_radius
+                )
+            if global_inflation_radius:
+                global_costmap_params["inflation_layer"]["inflation_radius"] = float(
+                    global_inflation_radius
+                )
+
+            fd, effective_params_file = tempfile.mkstemp(
+                prefix="nav2_mid360_static_only_", suffix=".yaml"
+            )
+            os.close(fd)
+            with open(effective_params_file, "w", encoding="utf-8") as f:
+                yaml.safe_dump(params, f, sort_keys=False)
+
+        return [
+            SetLaunchConfiguration("effective_params_file", effective_params_file),
+        ]
 
     map_server_node = Node(
         package="nav2_map_server",
@@ -97,7 +164,7 @@ def generate_launch_description():
         name="map_server",
         output="screen",
         parameters=[
-            LaunchConfiguration("params_file"),
+            LaunchConfiguration("effective_params_file"),
             {
                 "use_sim_time": LaunchConfiguration("use_sim_time"),
                 "yaml_filename": LaunchConfiguration("map"),
@@ -126,7 +193,7 @@ def generate_launch_description():
         launch_arguments={
             "use_sim_time": LaunchConfiguration("use_sim_time"),
             "autostart": LaunchConfiguration("autostart"),
-            "params_file": LaunchConfiguration("params_file"),
+            "params_file": LaunchConfiguration("effective_params_file"),
             "use_composition": LaunchConfiguration("use_composition"),
             "use_respawn": LaunchConfiguration("use_respawn"),
             "container_name": "nav2_container",
@@ -191,6 +258,11 @@ def generate_launch_description():
             chassis_params_file_arg,
             wheel_base_arg,
             bridge_publish_rate_arg,
+            disable_dynamic_obstacles_arg,
+            local_inflation_radius_arg,
+            global_inflation_radius_arg,
+            effective_params_file_arg,
+            OpaqueFunction(function=prepare_params_file),
             map_server_node,
             lifecycle_manager_localization,
             nav2_navigation,
